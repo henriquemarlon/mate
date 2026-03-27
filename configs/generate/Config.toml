@@ -1,0 +1,122 @@
+# Mate Configuration
+# This file defines all environment variables used by the Mate service.
+# Edit here, then run: go generate ./...
+
+# Service-wide
+
+[service.MATE_LOG_LEVEL]
+go-type = "LogLevel"
+default = "info"
+description = """Log level for the service (debug, info, warn, error)"""
+used-by = ["mate"]
+
+[service.MATE_LOG_COLOR]
+go-type = "bool"
+default = "true"
+description = """Colored log output"""
+used-by = ["mate"]
+
+# Anthropic
+
+[anthropic.MATE_ANTHROPIC_API_KEY]
+go-type = "RedactedString"
+file = true
+description = """Anthropic API key used for vision transcription and flashcard generation. Can be loaded from file using MATE_ANTHROPIC_API_KEY_FILE"""
+used-by = ["mate"]
+
+# Google
+
+[google.MATE_GOOGLE_API_KEY]
+go-type = "RedactedString"
+file = true
+description = """Google API key for embeddings (task_type=CLUSTERING). Can be loaded from file using MATE_GOOGLE_API_KEY_FILE"""
+used-by = ["mate"]
+
+[google.MATE_GOOGLE_EMBEDDING_MODEL]
+go-type = "string"
+default = "text-embedding-004"
+description = """Google embedding model name"""
+used-by = ["mate"]
+
+# Google Drive
+
+[drive.MATE_DRIVE_CREDENTIALS]
+go-type = "RedactedString"
+file = true
+description = """Google service account credentials JSON. Can be loaded from file using MATE_DRIVE_CREDENTIALS_FILE"""
+used-by = ["mate"]
+
+[drive.MATE_DRIVE_FOLDER_ID]
+go-type = "string"
+description = """Google Drive folder ID containing the Goodnotes exports to process"""
+used-by = ["mate"]
+
+# Qdrant
+
+[qdrant.MATE_QDRANT_ADDRESS]
+go-type = "string"
+default = "localhost:6334"
+description = """Qdrant gRPC address"""
+used-by = ["mate"]
+
+[qdrant.MATE_QDRANT_COLLECTION]
+go-type = "string"
+default = "notes"
+description = """Qdrant collection name for storing note vectors"""
+used-by = ["mate"]
+
+# DBSCAN clustering
+
+[cluster.MATE_DBSCAN_EPSILON]
+go-type = "string"
+default = "0.3"
+description = """DBSCAN epsilon — maximum cosine distance between points in a cluster (0.0-1.0)"""
+used-by = ["mate"]
+
+[cluster.MATE_DBSCAN_MIN_POINTS]
+go-type = "string"
+default = "2"
+description = """DBSCAN minimum points to form a cluster"""
+used-by = ["mate"]
+
+# AnkiConnect
+
+[anki.MATE_ANKI_CONNECT_URL]
+go-type = "string"
+default = "http://localhost:8765"
+description = """AnkiConnect API URL. Requires Anki running with the AnkiConnect plugin"""
+used-by = ["mate"]
+
+[anki.MATE_ANKI_DECK_PREFIX]
+go-type = "string"
+default = "Mate"
+description = """Anki deck name prefix. Cluster decks are created as {prefix}::{topic}"""
+used-by = ["mate"]
+
+[anki.MATE_ANKI_MODEL_NAME]
+go-type = "string"
+default = "Basic"
+description = """Anki note model/type (e.g. Basic, Cloze)"""
+used-by = ["mate"]
+
+# Local state
+
+[state.MATE_STATE_DB_PATH]
+go-type = "string"
+default = "~/.mate/state.db"
+description = """Path to BoltDB file for tracking cluster state and page assignments"""
+used-by = ["mate"]
+
+# HTTP API
+
+[http.MATE_HTTP_ADDRESS]
+go-type = "string"
+default = ":8081"
+description = """HTTP server address and port for the API server"""
+used-by = ["mate"]
+
+[http.MATE_API_KEY]
+go-type = "RedactedString"
+file = true
+description = """API key for authenticating HTTP API requests. Can be loaded from file using MATE_API_KEY_FILE"""
+used-by = ["mate"]
