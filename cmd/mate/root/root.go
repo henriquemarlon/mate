@@ -1,7 +1,6 @@
 package root
 
 import (
-	"github.com/henriquemarlon/mate/cmd/mate/root/serve"
 	syncCmd "github.com/henriquemarlon/mate/cmd/mate/root/sync"
 	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/infra/version"
@@ -21,7 +20,6 @@ var Cmd = &cobra.Command{
 func init() {
 	configs.SetDefaults()
 
-	// Global flags that apply to all subcommands
 	Cmd.PersistentFlags().String("anthropic-api-key", "", "Anthropic API key for vision and embeddings")
 	cobra.CheckErr(viper.BindPFlag(configs.ANTHROPIC_API_KEY, Cmd.PersistentFlags().Lookup("anthropic-api-key")))
 
@@ -37,9 +35,7 @@ func init() {
 	Cmd.PersistentFlags().String("log-level", "info", "Log level: debug, info, warn or error")
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_LEVEL, Cmd.PersistentFlags().Lookup("log-level")))
 
-	// Register subcommands
 	Cmd.AddCommand(syncCmd.Cmd)
-	Cmd.AddCommand(serve.Cmd)
 
 	Cmd.DisableAutoGenTag = true
 }

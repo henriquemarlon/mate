@@ -86,21 +86,6 @@ Google embedding model name
 * **Default:** `"text-embedding-004"`
 * **Used by:** mate
 
-## `MATE_API_KEY`
-
-API key for authenticating HTTP API requests. Can be loaded from file using MATE_API_KEY_FILE
-
-* **Type:** `RedactedString`
-* **Used by:** mate
-
-## `MATE_HTTP_ADDRESS`
-
-HTTP server address and port for the API server
-
-* **Type:** `string`
-* **Default:** `":8081"`
-* **Used by:** mate
-
 ## `MATE_QDRANT_ADDRESS`
 
 Qdrant gRPC address
@@ -131,6 +116,14 @@ Log level for the service (debug, info, warn, error)
 
 * **Type:** `LogLevel`
 * **Default:** `"info"`
+* **Used by:** mate
+
+## `MATE_SKILLS_DIR`
+
+Directory containing skill definition files (.md). Skills in this directory override built-in defaults.
+
+* **Type:** `string`
+* **Default:** `"~/.mate/skills"`
 * **Used by:** mate
 
 ## `MATE_STATE_DB_PATH`

@@ -12,7 +12,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-const systemPrompt = `You are an expert educator creating Anki flashcards from handwritten study notes.
+const defaultSystemPrompt = `You are an expert educator creating Anki flashcards from handwritten study notes.
 Rules:
 - Create clear, specific Q&A pairs that test understanding, not just recall
 - Each card should test ONE concept
@@ -32,29 +32,29 @@ PRIMARY PAGES (this cluster):
 Output JSON:
 {"topic": "<2-4 word topic label>", "flashcards": [{"front": "...", "back": "...", "tags": ["..."]}]}`
 
-// Generator uses Claude to generate flashcards from clustered page transcriptions.
 type Generator struct {
-	client anthropic.Client
-	model  string
+	client       anthropic.Client
+	model        string
+	systemPrompt string
 }
 
-// NewGenerator creates a new flashcard generator.
-func NewGenerator(apiKey string) *Generator {
+func NewGenerator(apiKey, systemPrompt string) *Generator {
+	if systemPrompt == "" {
+		systemPrompt = defaultSystemPrompt
+	}
 	return &Generator{
-		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
-		model:  string(anthropic.ModelClaudeSonnet4_6),
+		client:       anthropic.NewClient(option.WithAPIKey(apiKey)),
+		model:        string(anthropic.ModelClaudeSonnet4_6),
+		systemPrompt: systemPrompt,
 	}
 }
 
-// PageInput holds the data needed for flashcard generation.
 type PageInput struct {
-	NotebookName string
-	PageNumber   int
+	NotebookName  string
+	PageNumber    int
 	Transcription string
 }
 
-// Generate produces a topic label and flashcards from a set of cluster pages,
-// optionally with bridge pages from neighboring clusters for cross-topic context.
 func (g *Generator) Generate(ctx context.Context, pages []PageInput, bridgePages []PageInput) (*entity.ClusterResult, error) {
 	primaryText := formatPages(pages)
 	bridgeText := ""
@@ -73,14 +73,13 @@ func (g *Generator) Generate(ctx context.Context, pages []PageInput, bridgePages
 			),
 		},
 		System: []anthropic.TextBlockParam{
-			{Text: systemPrompt},
+			{Text: g.systemPrompt},
 		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("flashcardgen: API call: %w", err)
 	}
 
-	// Extract text from response
 	var sb strings.Builder
 	for _, block := range resp.Content {
 		if block.Type == "text" {
@@ -100,7 +99,6 @@ func formatPages(pages []PageInput) string {
 }
 
 func parseResponse(raw string) (*entity.ClusterResult, error) {
-	// Strip markdown code fences if present
 	text := strings.TrimSpace(raw)
 	text = strings.TrimPrefix(text, "```json")
 	text = strings.TrimPrefix(text, "```")

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/henriquemarlon/mate/configs"
+	"github.com/henriquemarlon/mate/internal/domain/skill"
 	"github.com/henriquemarlon/mate/internal/infra/anki"
 	"github.com/henriquemarlon/mate/internal/infra/drive"
 	"github.com/henriquemarlon/mate/internal/infra/embeddings"
@@ -54,6 +55,9 @@ func init() {
 
 	Cmd.Flags().BoolVar(&noAnki, "no-anki", false, "Skip Anki flashcard generation")
 
+	Cmd.Flags().String("skills-dir", "", "Directory containing skill definition files (.md)")
+	cobra.CheckErr(viper.BindPFlag(configs.SKILLS_DIR, Cmd.Flags().Lookup("skills-dir")))
+
 	Cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
 		var err error
 		cfg, err = configs.LoadMateConfig()
@@ -71,14 +75,27 @@ func run(cmd *cobra.Command, args []string) error {
 		Level: cfg.LogLevel,
 	}))
 
-	// --- Step 1-3: Drive → Vision → Embed → Qdrant ---
-
 	driveClient, err := drive.NewClient(ctx, cfg.DriveCredentials.Value, cfg.DriveFolderId)
 	if err != nil {
 		return err
 	}
 
-	visionClient := vision.NewClient(cfg.AnthropicApiKey.Value)
+	skillsDir, err := configs.ExpandPath(cfg.SkillsDir)
+	if err != nil {
+		return err
+	}
+
+	skillStore, err := skill.NewStore(skillsDir)
+	if err != nil {
+		return err
+	}
+
+	transcribeSkill, err := skillStore.Get("transcribe")
+	if err != nil {
+		return err
+	}
+
+	visionClient := vision.NewClient(cfg.AnthropicApiKey.Value, transcribeSkill.Prompt)
 	embeddingsClient := embeddings.NewClient(cfg.GoogleApiKey.Value, cfg.GoogleEmbeddingModel)
 
 	storeClient, err := store.NewClient(cfg.QdrantAddress, cfg.QdrantCollection)
@@ -90,8 +107,6 @@ func run(cmd *cobra.Command, args []string) error {
 	if _, err := syncUC.Execute(ctx); err != nil {
 		return err
 	}
-
-	// --- Step 4-5: Cluster → Detect dirty ---
 
 	dbPath, err := configs.ExpandPath(cfg.StateDbPath)
 	if err != nil {
@@ -120,8 +135,6 @@ func run(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// --- Step 6: Generate flashcards + push to Anki ---
-
 	if noAnki {
 		logger.Info("skipping Anki (--no-anki flag set)", "dirty_clusters", len(dirty), "stale_clusters", len(stale))
 		return nil
@@ -129,16 +142,19 @@ func run(cmd *cobra.Command, args []string) error {
 
 	ankiClient := anki.NewClient(cfg.AnkiConnectUrl, cfg.AnkiDeckPrefix, cfg.AnkiModelName)
 
-	// Check if Anki is reachable
 	if err := ankiClient.Ping(ctx); err != nil {
 		logger.Warn("Anki is not reachable, skipping flashcard generation", "error", err)
 		return nil
 	}
 
-	generator := flashcardgen.NewGenerator(cfg.AnthropicApiKey.Value)
+	flashcardSkill, err := skillStore.Get("flashcard-general")
+	if err != nil {
+		return err
+	}
+
+	generator := flashcardgen.NewGenerator(cfg.AnthropicApiKey.Value, flashcardSkill.Prompt)
 	genUC := usecase.NewGenerateFlashcards(generator, ankiClient, storeClient, stateDB, logger)
 
-	// Process dirty clusters
 	for _, dc := range dirty {
 		if err := genUC.ProcessDirtyCluster(ctx, dc); err != nil {
 			logger.Error("failed to process cluster", "cluster_id", dc.ClusterID, "error", err)
@@ -146,7 +162,6 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Cleanup stale clusters
 	for _, sc := range stale {
 		if err := genUC.CleanupStaleCluster(ctx, sc); err != nil {
 			logger.Error("failed to cleanup stale cluster", "cluster_id", sc.ClusterID, "error", err)

@@ -1,4 +1,4 @@
-package cluster
+package dbscan
 
 import (
 	"testing"
@@ -83,9 +83,9 @@ func TestCosineDistance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := cosineDistance(tt.a, tt.b)
+			got := CosineDistance(tt.a, tt.b)
 			if diff := got - tt.want; diff < -tt.tol || diff > tt.tol {
-				t.Errorf("cosineDistance = %f, want %f", got, tt.want)
+				t.Errorf("CosineDistance = %f, want %f", got, tt.want)
 			}
 		})
 	}

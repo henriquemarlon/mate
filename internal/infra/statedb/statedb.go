@@ -16,7 +16,6 @@ var (
 	pagesBucket    = []byte("pages")
 )
 
-// ClusterState tracks the state of a single cluster across sync runs.
 type ClusterState struct {
 	Topic       string   `json:"topic"`
 	PageIDs     []string `json:"page_ids"`
@@ -25,19 +24,16 @@ type ClusterState struct {
 	UpdatedAt   string   `json:"updated_at"`
 }
 
-// PageState tracks which cluster a page belongs to and its content hash.
 type PageState struct {
 	ContentHash string `json:"content_hash"`
 	ClusterID   int    `json:"cluster_id"`
 	ProcessedAt string `json:"processed_at"`
 }
 
-// DB wraps BoltDB for cluster and page state tracking.
 type DB struct {
 	db *bolt.DB
 }
 
-// Open opens (or creates) the BoltDB state database at the given path.
 func Open(path string) (*DB, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -66,12 +62,10 @@ func Open(path string) (*DB, error) {
 	return &DB{db: db}, nil
 }
 
-// Close closes the database.
 func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-// GetCluster retrieves the state of a cluster by ID. Returns nil if not found.
 func (d *DB) GetCluster(clusterID int) (*ClusterState, error) {
 	var state *ClusterState
 	err := d.db.View(func(tx *bolt.Tx) error {
@@ -89,7 +83,6 @@ func (d *DB) GetCluster(clusterID int) (*ClusterState, error) {
 	return state, nil
 }
 
-// SetCluster stores the state of a cluster.
 func (d *DB) SetCluster(clusterID int, state *ClusterState) error {
 	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	data, err := json.Marshal(state)
@@ -101,14 +94,12 @@ func (d *DB) SetCluster(clusterID int, state *ClusterState) error {
 	})
 }
 
-// DeleteCluster removes a cluster's state.
 func (d *DB) DeleteCluster(clusterID int) error {
 	return d.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(clustersBucket).Delete([]byte(strconv.Itoa(clusterID)))
 	})
 }
 
-// AllClusters returns all stored cluster states.
 func (d *DB) AllClusters() (map[int]*ClusterState, error) {
 	clusters := make(map[int]*ClusterState)
 	err := d.db.View(func(tx *bolt.Tx) error {
@@ -116,11 +107,11 @@ func (d *DB) AllClusters() (map[int]*ClusterState, error) {
 		return b.ForEach(func(k, v []byte) error {
 			id, err := strconv.Atoi(string(k))
 			if err != nil {
-				return nil // skip invalid keys
+				return nil
 			}
 			var state ClusterState
 			if err := json.Unmarshal(v, &state); err != nil {
-				return nil // skip corrupted entries
+				return nil
 			}
 			clusters[id] = &state
 			return nil
@@ -132,7 +123,6 @@ func (d *DB) AllClusters() (map[int]*ClusterState, error) {
 	return clusters, nil
 }
 
-// GetPage retrieves the state of a page by its ID (notebookID:pageNum).
 func (d *DB) GetPage(pageID string) (*PageState, error) {
 	var state *PageState
 	err := d.db.View(func(tx *bolt.Tx) error {
@@ -150,7 +140,6 @@ func (d *DB) GetPage(pageID string) (*PageState, error) {
 	return state, nil
 }
 
-// SetPage stores the state of a page.
 func (d *DB) SetPage(pageID string, state *PageState) error {
 	state.ProcessedAt = time.Now().UTC().Format(time.RFC3339)
 	data, err := json.Marshal(state)

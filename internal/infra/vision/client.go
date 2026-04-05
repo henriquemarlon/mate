@@ -10,26 +10,27 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-const transcriptionPrompt = `Transcribe all handwritten text in this image exactly as written.
+const defaultTranscriptionPrompt = `Transcribe all handwritten text in this image exactly as written.
 Preserve structure, formatting, headings, bullet points, and any diagrams described in text.
 If you cannot read a word, use [illegible]. Output only the transcribed text, nothing else.`
 
-// Client wraps the Anthropic API for vision-based transcription of handwritten notes.
 type Client struct {
 	client anthropic.Client
 	model  string
+	prompt string
 }
 
-// NewClient creates a new vision client.
-func NewClient(apiKey string) *Client {
+func NewClient(apiKey, prompt string) *Client {
+	if prompt == "" {
+		prompt = defaultTranscriptionPrompt
+	}
 	return &Client{
 		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
 		model:  string(anthropic.ModelClaudeSonnet4_6),
+		prompt: prompt,
 	}
 }
 
-// Transcribe sends a page image to Claude and returns the transcribed text.
-// imageData is the raw image bytes and mediaType is e.g. "image/png" or "image/jpeg".
 func (c *Client) Transcribe(ctx context.Context, imageData []byte, mediaType string) (string, error) {
 	encoded := base64.StdEncoding.EncodeToString(imageData)
 
@@ -39,7 +40,7 @@ func (c *Client) Transcribe(ctx context.Context, imageData []byte, mediaType str
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(
 				anthropic.NewImageBlockBase64(mediaType, encoded),
-				anthropic.NewTextBlock(transcriptionPrompt),
+				anthropic.NewTextBlock(c.prompt),
 			),
 		},
 	})

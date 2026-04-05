@@ -11,14 +11,12 @@ import (
 
 const baseURL = "https://generativelanguage.googleapis.com/v1beta"
 
-// Client wraps the Google Generative AI embedding API.
 type Client struct {
 	apiKey string
 	model  string
 	http   *http.Client
 }
 
-// NewClient creates a new embeddings client.
 func NewClient(apiKey, model string) *Client {
 	return &Client{
 		apiKey: apiKey,
@@ -27,11 +25,10 @@ func NewClient(apiKey, model string) *Client {
 	}
 }
 
-// embedRequest is the JSON body for the embedContent API.
 type embedRequest struct {
-	Model   string       `json:"model"`
-	Content contentParam `json:"content"`
-	TaskType string     `json:"taskType"`
+	Model    string       `json:"model"`
+	Content  contentParam `json:"content"`
+	TaskType string       `json:"taskType"`
 }
 
 type contentParam struct {
@@ -56,7 +53,6 @@ type apiError struct {
 	Message string `json:"message"`
 }
 
-// Embed generates an embedding vector for the given text using task_type=CLUSTERING.
 func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	body := embedRequest{
 		Model: "models/" + c.model,

@@ -13,7 +13,6 @@ import (
 
 const bridgePageLimit = 5
 
-// GenerateFlashcards orchestrates: label + bridge context + generate + Anki push (pipeline step 6).
 type GenerateFlashcards struct {
 	generator *flashcardgen.Generator
 	anki      *anki.Client
@@ -22,7 +21,6 @@ type GenerateFlashcards struct {
 	logger    *slog.Logger
 }
 
-// NewGenerateFlashcards creates a new GenerateFlashcards usecase.
 func NewGenerateFlashcards(
 	generator *flashcardgen.Generator,
 	ankiClient *anki.Client,
@@ -39,14 +37,12 @@ func NewGenerateFlashcards(
 	}
 }
 
-// ProcessDirtyCluster generates flashcards for a dirty cluster and pushes them to Anki.
 func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCluster) error {
 	g.logger.Info("generating flashcards for cluster",
 		"cluster_id", dc.ClusterID,
 		"pages", len(dc.PagePoints),
 	)
 
-	// Delete old Anki cards if this cluster was previously processed
 	if dc.OldState != nil && len(dc.OldState.AnkiCardIDs) > 0 {
 		g.logger.Info("deleting old cards",
 			"cluster_id", dc.ClusterID,
@@ -58,7 +54,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		}
 	}
 
-	// Prepare primary pages
 	primaryPages := make([]flashcardgen.PageInput, len(dc.PagePoints))
 	for i, pp := range dc.PagePoints {
 		primaryPages[i] = flashcardgen.PageInput{
@@ -68,7 +63,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		}
 	}
 
-	// Fetch bridge pages (K nearest from other clusters)
 	excludeIDs := make([]string, len(dc.PagePoints))
 	for i, pp := range dc.PagePoints {
 		excludeIDs[i] = pp.ID
@@ -91,7 +85,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		}
 	}
 
-	// Generate topic label + flashcards via Claude
 	result, err := g.generator.Generate(ctx, primaryPages, bridgePages)
 	if err != nil {
 		return fmt.Errorf("generate flashcards cluster %d: %w", dc.ClusterID, err)
@@ -103,7 +96,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		"card_count", len(result.Flashcards),
 	)
 
-	// Create Anki deck and push cards
 	deckName := g.anki.DeckName(result.Topic)
 	if err := g.anki.EnsureDeck(ctx, deckName); err != nil {
 		return fmt.Errorf("ensure deck %q: %w", deckName, err)
@@ -126,7 +118,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		return fmt.Errorf("add notes to Anki: %w", err)
 	}
 
-	// Filter out failed card IDs (0 means duplicate/failed)
 	var validCardIDs []int64
 	for _, id := range cardIDs {
 		if id != 0 {
@@ -134,7 +125,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		}
 	}
 
-	// Save cluster state
 	pageIDs := make([]string, len(dc.PagePoints))
 	for i, pp := range dc.PagePoints {
 		pageIDs[i] = pp.ID
@@ -149,7 +139,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 		return fmt.Errorf("save cluster state: %w", err)
 	}
 
-	// Update page states
 	for _, pp := range dc.PagePoints {
 		if err := g.stateDB.SetPage(pp.ID, &statedb.PageState{
 			ContentHash: pp.ContentHash,
@@ -169,7 +158,6 @@ func (g *GenerateFlashcards) ProcessDirtyCluster(ctx context.Context, dc DirtyCl
 	return nil
 }
 
-// CleanupStaleCluster removes Anki cards and state for a cluster that no longer exists.
 func (g *GenerateFlashcards) CleanupStaleCluster(ctx context.Context, sc StaleCluster) error {
 	g.logger.Info("cleaning up stale cluster",
 		"cluster_id", sc.ClusterID,

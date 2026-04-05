@@ -7,24 +7,21 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 )
 
-// PagePoint represents a page stored as a vector point in Qdrant.
 type PagePoint struct {
-	ID           string
-	NotebookID   string
-	NotebookName string
-	PageNumber   int64
+	ID            string
+	NotebookID    string
+	NotebookName  string
+	PageNumber    int64
 	Transcription string
-	ContentHash  string
-	Vector       []float32
+	ContentHash   string
+	Vector        []float32
 }
 
-// Client wraps the Qdrant gRPC client for vector storage and search.
 type Client struct {
 	client     *qdrant.Client
 	collection string
 }
 
-// NewClient creates a new Qdrant store client.
 func NewClient(address, collection string) (*Client, error) {
 	host, port, err := parseAddress(address)
 	if err != nil {
@@ -42,8 +39,6 @@ func NewClient(address, collection string) (*Client, error) {
 	return &Client{client: client, collection: collection}, nil
 }
 
-// EnsureCollection creates the collection if it doesn't exist.
-// vectorSize is the dimensionality of the embedding vectors.
 func (c *Client) EnsureCollection(ctx context.Context, vectorSize uint64) error {
 	exists, err := c.client.CollectionExists(ctx, c.collection)
 	if err != nil {
@@ -66,7 +61,6 @@ func (c *Client) EnsureCollection(ctx context.Context, vectorSize uint64) error 
 	return nil
 }
 
-// Upsert stores a page vector with metadata in Qdrant.
 func (c *Client) Upsert(ctx context.Context, p PagePoint) error {
 	vectors := make([]float32, len(p.Vector))
 	copy(vectors, p.Vector)
@@ -95,7 +89,6 @@ func (c *Client) Upsert(ctx context.Context, p PagePoint) error {
 	return nil
 }
 
-// ScrollAll retrieves all points from the collection, paginating through all results.
 func (c *Client) ScrollAll(ctx context.Context) ([]PagePoint, error) {
 	var all []PagePoint
 	var offset *qdrant.PointId
@@ -134,7 +127,6 @@ func (c *Client) ScrollAll(ctx context.Context) ([]PagePoint, error) {
 	return all, nil
 }
 
-// Search finds the K nearest points to the given vector, optionally excluding specific IDs.
 func (c *Client) Search(ctx context.Context, vector []float32, limit uint64, excludeIDs []string) ([]PagePoint, error) {
 	queryVec := make([]float32, len(vector))
 	copy(queryVec, vector)
@@ -230,7 +222,6 @@ func pointIDToString(id *qdrant.PointId) string {
 }
 
 func parseAddress(addr string) (string, int, error) {
-	// Simple host:port parser
 	for i := len(addr) - 1; i >= 0; i-- {
 		if addr[i] == ':' {
 			host := addr[:i]

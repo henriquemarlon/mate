@@ -9,22 +9,17 @@ import (
 	"google.golang.org/api/option"
 )
 
-// File represents a file found in Google Drive.
 type File struct {
-	ID   string
-	Name string
-	// MimeType is the MIME type of the file (e.g. "application/pdf").
+	ID       string
+	Name     string
 	MimeType string
 }
 
-// Client wraps the Google Drive API for listing and downloading files.
 type Client struct {
 	service  *drive.Service
 	folderID string
 }
 
-// NewClient creates a new Drive client authenticated with a service account.
-// credentialsJSON is the raw JSON content of the service account key file.
 func NewClient(ctx context.Context, credentialsJSON string, folderID string) (*Client, error) {
 	svc, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(credentialsJSON)))
 	if err != nil {
@@ -33,7 +28,6 @@ func NewClient(ctx context.Context, credentialsJSON string, folderID string) (*C
 	return &Client{service: svc, folderID: folderID}, nil
 }
 
-// ListPDFs returns all PDF files in the configured folder.
 func (c *Client) ListPDFs(ctx context.Context) ([]File, error) {
 	query := fmt.Sprintf("'%s' in parents and mimeType='application/pdf' and trashed=false", c.folderID)
 
@@ -73,7 +67,6 @@ func (c *Client) ListPDFs(ctx context.Context) ([]File, error) {
 	return files, nil
 }
 
-// Download downloads a file by ID and writes its content to w.
 func (c *Client) Download(ctx context.Context, fileID string, w io.Writer) error {
 	resp, err := c.service.Files.Get(fileID).Context(ctx).Download()
 	if err != nil {

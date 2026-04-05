@@ -58,7 +58,6 @@ var (
 	toRedactedString = ToRedactedStringFromString
 )
 
-// ExpandPath expands ~ to the user's home directory in a file path.
 func ExpandPath(path string) (string, error) {
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()

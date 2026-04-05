@@ -9,7 +9,6 @@ import (
 	"net/http"
 )
 
-// Note represents an Anki note to be added via AnkiConnect.
 type Note struct {
 	DeckName  string
 	ModelName string
@@ -18,30 +17,26 @@ type Note struct {
 	Tags      []string
 }
 
-// Client wraps the AnkiConnect API for managing flashcards.
 type Client struct {
-	url       string
+	url        string
 	deckPrefix string
-	modelName string
-	http      *http.Client
+	modelName  string
+	http       *http.Client
 }
 
-// NewClient creates a new AnkiConnect client.
 func NewClient(url, deckPrefix, modelName string) *Client {
 	return &Client{
-		url:       url,
+		url:        url,
 		deckPrefix: deckPrefix,
-		modelName: modelName,
-		http:      &http.Client{},
+		modelName:  modelName,
+		http:       &http.Client{},
 	}
 }
 
-// DeckName returns the full deck name for a given cluster topic.
 func (c *Client) DeckName(topic string) string {
 	return c.deckPrefix + "::" + topic
 }
 
-// Ping checks if AnkiConnect is reachable.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.invoke(ctx, "version", nil)
 	if err != nil {
@@ -50,7 +45,6 @@ func (c *Client) Ping(ctx context.Context) error {
 	return nil
 }
 
-// EnsureDeck creates the deck if it doesn't exist.
 func (c *Client) EnsureDeck(ctx context.Context, deckName string) error {
 	_, err := c.invoke(ctx, "createDeck", map[string]any{
 		"deck": deckName,
@@ -61,7 +55,6 @@ func (c *Client) EnsureDeck(ctx context.Context, deckName string) error {
 	return nil
 }
 
-// AddNotes adds multiple notes to Anki. Returns the created note IDs.
 func (c *Client) AddNotes(ctx context.Context, notes []Note) ([]int64, error) {
 	ankiNotes := make([]map[string]any, len(notes))
 	for i, n := range notes {
@@ -93,14 +86,13 @@ func (c *Client) AddNotes(ctx context.Context, notes []Note) ([]int64, error) {
 			case float64:
 				ids = append(ids, int64(id))
 			case nil:
-				ids = append(ids, 0) // failed to add (duplicate)
+				ids = append(ids, 0)
 			}
 		}
 	}
 	return ids, nil
 }
 
-// FindNotes finds note IDs matching the given query string.
 func (c *Client) FindNotes(ctx context.Context, query string) ([]int64, error) {
 	result, err := c.invoke(ctx, "findNotes", map[string]any{
 		"query": query,
@@ -120,7 +112,6 @@ func (c *Client) FindNotes(ctx context.Context, query string) ([]int64, error) {
 	return ids, nil
 }
 
-// DeleteNotes deletes notes by their IDs.
 func (c *Client) DeleteNotes(ctx context.Context, noteIDs []int64) error {
 	_, err := c.invoke(ctx, "deleteNotes", map[string]any{
 		"notes": noteIDs,
@@ -131,7 +122,6 @@ func (c *Client) DeleteNotes(ctx context.Context, noteIDs []int64) error {
 	return nil
 }
 
-// DeleteDeck deletes a deck and all its cards.
 func (c *Client) DeleteDeck(ctx context.Context, deckName string) error {
 	_, err := c.invoke(ctx, "deleteDecks", map[string]any{
 		"decks":    []string{deckName},
@@ -150,7 +140,7 @@ type ankiRequest struct {
 }
 
 type ankiResponse struct {
-	Result any    `json:"result"`
+	Result any     `json:"result"`
 	Error  *string `json:"error"`
 }
 
