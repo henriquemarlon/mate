@@ -1,54 +1,60 @@
 package main
 
 import (
-	"os"
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
-func readTOML(name string) string {
-	bytes, err := os.ReadFile(name)
-	if err != nil {
-		panic(err)
+type configTOML map[string]map[string]*Env
+
+func loadConfig(path string) ([]Env, error) {
+	var input configTOML
+	if _, err := toml.DecodeFile(path, &input); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
 	}
-	return string(bytes)
-}
 
-type configTOML = map[string](map[string]*Env)
-
-func decodeTOML(data string) configTOML {
-	var config configTOML
-	_, err := toml.Decode(data, &config)
-	if err != nil {
-		panic(err)
-	}
-	return config
-}
-
-func sortConfig(config configTOML) []Env {
 	var topics []string
-	mapping := make(map[string]([]string))
-
-	for name, topic := range config {
-		var envs []string
-		for name, env := range topic {
-			env.Name = name
-			envs = append(envs, name)
-		}
-		sort.Strings(envs)
-
-		topics = append(topics, name)
-		mapping[name] = envs
+	for topic := range input {
+		topics = append(topics, topic)
 	}
 	sort.Strings(topics)
 
-	var envs []Env
+	var result []Env
 	for _, topic := range topics {
-		for _, name := range mapping[topic] {
-			envs = append(envs, *config[topic][name])
+		var names []string
+		for name := range input[topic] {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			env := *input[topic][name]
+			env.Name = name
+			if err := env.validate(); err != nil {
+				return nil, err
+			}
+			result = append(result, env)
 		}
 	}
+	return result, nil
+}
 
-	return envs
+func fieldName(name string) string {
+	words := strings.Split(strings.TrimPrefix(name, "MATE_"), "_")
+	for index, word := range words {
+		switch word {
+		case "DB", "DPI":
+			words[index] = word
+		default:
+			word = strings.ToLower(word)
+			words[index] = strings.ToUpper(word[:1]) + word[1:]
+		}
+	}
+	return strings.Join(words, "")
+}
+
+func constName(name string) string {
+	return strings.TrimPrefix(name, "MATE_")
 }

@@ -1,14 +1,16 @@
-//go:generate go run .
-
 package main
 
+import "log"
+
 func main() {
-	data := readTOML("Config.toml")
-	config := decodeTOML(data)
-	envs := sortConfig(config)
-	for _, env := range envs {
-		env.validate()
+	envs, err := loadConfig("generate/Config.toml")
+	if err != nil {
+		log.Fatal(err)
 	}
-	generateDocsFile("../../docs/config.md", envs)
-	generateCodeFile("../generated.go", envs)
+	if err := generateCode("generated.go", envs); err != nil {
+		log.Fatal(err)
+	}
+	if err := generateDocs("../docs/config.md", envs); err != nil {
+		log.Fatal(err)
+	}
 }

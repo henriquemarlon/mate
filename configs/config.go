@@ -1,4 +1,8 @@
+// Package configs manages Mate configuration sourced from environment variables.
+// The generate sub-package declares those variables and produces generated.go.
 package configs
+
+//go:generate go run ./generate
 
 import (
 	"fmt"
@@ -7,72 +11,66 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
-
-type Redacted[T any] struct {
-	Value T
-}
-
-func (r Redacted[T]) String() string {
-	return "[REDACTED]"
-}
 
 type (
-	Duration       = time.Duration
-	LogLevel       = slog.Level
-	RedactedString = Redacted[string]
+	LogLevel  = slog.Level
+	Path      = string
+	RenderDPI = int
 )
 
-func ToStringFromString(s string) (string, error) {
-	return s, nil
+func ToStringFromString(value string) (string, error) {
+	return value, nil
 }
 
-func ToDurationFromSeconds(s string) (time.Duration, error) {
-	return time.ParseDuration(s + "s")
+func ToRenderDPIFromString(value string) (RenderDPI, error) {
+	dpi, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	if dpi < 72 || dpi > 600 {
+		return 0, fmt.Errorf("must be between 72 and 600, got %d", dpi)
+	}
+	return dpi, nil
 }
 
-func ToLogLevelFromString(s string) (LogLevel, error) {
-	var m = map[string]LogLevel{
+func ToLogLevelFromString(value string) (LogLevel, error) {
+	levels := map[string]LogLevel{
 		"debug": slog.LevelDebug,
 		"info":  slog.LevelInfo,
 		"warn":  slog.LevelWarn,
 		"error": slog.LevelError,
 	}
-	if v, ok := m[s]; ok {
-		return v, nil
+	if level, ok := levels[strings.ToLower(value)]; ok {
+		return level, nil
 	}
-	var zeroValue LogLevel
-	return zeroValue, fmt.Errorf("invalid log level '%s'", s)
+	return slog.LevelInfo, fmt.Errorf("invalid log level %q", value)
 }
 
-func ToRedactedStringFromString(s string) (RedactedString, error) {
-	return RedactedString{s}, nil
-}
-
-var (
-	toBool           = strconv.ParseBool
-	toString         = ToStringFromString
-	toDuration       = ToDurationFromSeconds
-	toLogLevel       = ToLogLevelFromString
-	toRedactedString = ToRedactedStringFromString
-)
-
-func ExpandPath(path string) (string, error) {
-	if strings.HasPrefix(path, "~") {
+func ToPathFromString(value string) (Path, error) {
+	if value == "~" || strings.HasPrefix(value, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("expand home dir: %w", err)
+			return "", fmt.Errorf("resolve home directory: %w", err)
 		}
-		path = filepath.Join(home, path[1:])
+		if value == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, value[2:]), nil
 	}
-	return path, nil
+	return filepath.Clean(value), nil
 }
 
 var (
-	notDefinedbool           = func() bool { return false }
-	notDefinedstring         = func() string { return "" }
-	notDefinedDuration       = func() time.Duration { return 0 }
-	notDefinedLogLevel       = func() slog.Level { return slog.LevelInfo }
-	notDefinedRedactedString = func() RedactedString { return RedactedString{""} }
+	toLogLevel  = ToLogLevelFromString
+	toPath      = ToPathFromString
+	toRenderDPI = ToRenderDPIFromString
+	toString    = ToStringFromString
+)
+
+var (
+	notDefinedLogLevel  = func() LogLevel { return slog.LevelInfo }
+	notDefinedPath      = func() Path { return "" }
+	notDefinedRenderDPI = func() RenderDPI { return 0 }
+	notDefinedstring    = func() string { return "" }
 )

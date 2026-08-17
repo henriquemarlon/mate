@@ -1,26 +1,26 @@
 package main
 
+import "fmt"
+
 type Env struct {
-	Name string
-
-	Default *string `toml:"default"`
-
-	GoType string `toml:"go-type"`
-
-	Description string `toml:"description"`
-
-	Omit bool `toml:"omit"`
-
-	File bool `toml:"file"`
-
-	UsedBy []string `toml:"used-by"`
+	Name        string
+	Default     *string  `toml:"default"`
+	GoType      string   `toml:"go-type"`
+	Description string   `toml:"description"`
+	UsedBy      []string `toml:"used-by"`
 }
 
-func (e *Env) validate() {
-	if e.GoType == "" {
-		panic("missing go-type for " + e.Name)
+func (e Env) validate() error {
+	if e.Default == nil {
+		return fmt.Errorf("%s: missing default", e.Name)
 	}
 	if e.Description == "" {
-		panic("missing description for " + e.Name)
+		return fmt.Errorf("%s: missing description", e.Name)
 	}
+	switch e.GoType {
+	case "string", "LogLevel", "Path", "RenderDPI":
+	default:
+		return fmt.Errorf("%s: unsupported go-type %q", e.Name, e.GoType)
+	}
+	return nil
 }
