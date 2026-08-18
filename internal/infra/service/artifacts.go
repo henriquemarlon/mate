@@ -1,4 +1,4 @@
-package artifacts
+package service
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
 )
 
-func WriteTranscript(root, noteID string, pages []entity.Page) error {
+func writeTranscript(root, noteID string, pages []entity.Page) error {
 	dir, err := noteDirectory(root, noteID)
 	if err != nil {
 		return err
@@ -32,7 +32,7 @@ func WriteTranscript(root, noteID string, pages []entity.Page) error {
 	return writeAtomic(filepath.Join(dir, "transcript.md"), []byte(content.String()))
 }
 
-func WriteMaterial(root, noteID string, material paradigm.Material) error {
+func writeMaterial(root, noteID string, material paradigm.GenerateOutput) error {
 	dir, err := noteDirectory(root, noteID)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func WriteMaterial(root, noteID string, material paradigm.Material) error {
 	return writeAtomic(filepath.Join(dir, "cards.json"), append(cards, '\n'))
 }
 
-func WriteReviewPage(root, noteID string, pageNumber int, pagePNG []byte, boxes [][]int) error {
+func writeReviewPage(root, noteID string, pageNumber int, pagePNG []byte, boxes [][]int) error {
 	dir, err := noteDirectory(root, noteID)
 	if err != nil {
 		return err

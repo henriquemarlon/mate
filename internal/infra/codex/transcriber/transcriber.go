@@ -7,31 +7,18 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/assets"
-	"github.com/henriquemarlon/mate/internal/infra/codex"
+	"github.com/henriquemarlon/mate/pkg/codex"
 )
 
-type Uncertainty struct {
-	Label string `json:"label"`
-	Text  string `json:"text"`
-	BBox  []int  `json:"bbox"`
-}
-
-type Result struct {
-	Kind          string        `json:"kind"`
-	Markdown      string        `json:"markdown"`
-	NeedsReview   bool          `json:"needs_review"`
-	Uncertainties []Uncertainty `json:"uncertainties"`
-}
-
 type Transcriber struct {
-	client *codex.Client
+	client codex.Codex
 }
 
-func New(client *codex.Client) *Transcriber {
+func New(client codex.Codex) *Transcriber {
 	return &Transcriber{client: client}
 }
 
-func (t *Transcriber) Transcribe(ctx context.Context, imageData []byte) (Result, error) {
+func (t *Transcriber) Transcribe(ctx context.Context, imageData []byte) (TranscribeOutput, error) {
 	result, err := t.client.Execute(ctx, codex.Request{
 		Prompt:    transcriptionPrompt,
 		ImageData: imageData,
@@ -39,14 +26,14 @@ func (t *Transcriber) Transcribe(ctx context.Context, imageData []byte) (Result,
 		Schema:    assets.TranscriptionSchemaJSON,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("transcription: transcribe: %w", err)
+		return TranscribeOutput{}, fmt.Errorf("transcription: transcribe: %w", err)
 	}
-	var response Result
+	var response TranscribeOutput
 	if err := json.Unmarshal(result, &response); err != nil {
-		return Result{}, fmt.Errorf("transcription: parse response: %w", err)
+		return TranscribeOutput{}, fmt.Errorf("transcription: parse response: %w", err)
 	}
 	if response.Kind == "content" && strings.TrimSpace(response.Markdown) == "" {
-		return Result{}, fmt.Errorf("transcription: content page has empty transcription")
+		return TranscribeOutput{}, fmt.Errorf("transcription: content page has empty transcription")
 	}
 	return response, nil
 }

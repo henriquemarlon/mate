@@ -20,7 +20,7 @@ pdftoppm -> page PNGs -> visual hashes -> SQLite
              transcript.md + feynman.md + cards.json
 ```
 
-Go owns file discovery, PDF rendering, hashing, state, retries and artifacts. The official Codex CLI is used only where model judgment is needed.
+Go owns file discovery, PDF rendering, hashing, state, retries and artifacts. One persistent official Codex App Server process is used only where model judgment is needed.
 
 ## Requirements
 
@@ -28,8 +28,6 @@ Go owns file discovery, PDF rendering, hashing, state, retries and artifacts. Th
 - Official Codex CLI, authenticated with `codex login`
 - Poppler's `pdftoppm` on `PATH`
 - A local folder containing PDFs synced from GoodNotes/Google Drive
-
-Mate also detects the Codex binary bundled with `ChatGPT.app` on macOS.
 
 ## Run
 
@@ -41,6 +39,32 @@ go run ./cmd/mate run \
 ```
 
 The generated [configuration reference](docs/config.md) documents the equivalent environment variables and defaults. Its source of truth is `configs/generate/Config.toml`.
+
+## Run iteratively with Docker
+
+Build the image with the host user ID so the container can write to the mounted state directory:
+
+```bash
+docker build -f build/Dockerfile --build-arg UID="$(id -u)" -t mate .
+mkdir -p "$HOME/.mate/output"
+```
+
+Run Mate every 15 minutes. The GoodNotes directory is read-only; the SQLite database and generated artifacts persist under `~/.mate`; and the Codex authentication already created by `codex login` is shared with the container:
+
+```bash
+docker run --rm --init \
+  --name mate \
+  -v "$HOME/GoodNotes:/notes:ro" \
+  -v "$HOME/.mate:/home/mate/.mate" \
+  -v "$HOME/.codex:/home/mate/.codex" \
+  mate run \
+  --study-dir=/notes \
+  --output-dir=/home/mate/.mate/output \
+  --state-db=/home/mate/.mate/state.db \
+  --poll-interval=900
+```
+
+Stop the loop with `docker stop mate`. Every iteration scans the directory again, but unchanged page hashes are skipped before reaching Codex. Change `--poll-interval` to use another interval, or omit it (or pass `0`) to run once and exit.
 
 ## Run automatically on macOS
 
@@ -87,18 +111,17 @@ Each note receives:
 ## Current packages
 
 ```text
-assets                  embedded runtime schemas
-cmd/mate/root/run     CLI command
-configs              typed generated configuration and validation
-configs/generate     declarative configuration generator
-internal/domain/entity persisted entities and typed lifecycle status
-internal/infra/repository repository contract and SQLite persistence
-internal/infra/codex Codex execution boundary
-internal/infra/codex/transcriber visual classification and transcription
-internal/infra/codex/paradigm transcript -> Feynman + cards
-internal/artifacts   atomic file publication and review annotations
-internal/workflow    PDF rendering, hashing, and deterministic orchestration
-init/launchd         macOS periodic execution
+assets                            embedded runtime schemas
+cmd/mate/root/run                 CLI command
+configs                          typed generated configuration and validation
+configs/generate                 declarative configuration generator
+internal/domain/entity           persisted entities and typed lifecycle status
+internal/infra/repository        repository contract and SQLite persistence
+internal/infra/service           workflow, rendering, hashing, and artifact publication
+pkg/codex                        reusable Codex App Server client and stdio backend
+internal/infra/codex/transcriber Mate-specific visual classification and transcription
+internal/infra/codex/paradigm    Mate-specific transcript -> Feynman + cards
+init/launchd                     macOS periodic execution
 ```
 
 ## Verify

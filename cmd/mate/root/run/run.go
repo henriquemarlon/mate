@@ -2,10 +2,10 @@ package run
 
 import (
 	"errors"
-	"log/slog"
+	"time"
 
 	"github.com/henriquemarlon/mate/configs"
-	"github.com/henriquemarlon/mate/internal/workflow"
+	"github.com/henriquemarlon/mate/internal/infra/service"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -26,11 +26,17 @@ func init() {
 	Cmd.Flags().String("state-db", "", "SQLite state database path")
 	Cmd.Flags().String("codex-bin", "", "Path or executable name for the official Codex CLI")
 	Cmd.Flags().Int("dpi", 0, "PDF render DPI (72-600)")
+	Cmd.Flags().Int("poll-interval", 0, "Interval in seconds between runs; 0 runs once and exits")
+	Cmd.Flags().String("log-level", "", "Log level: debug, info, warn, or error")
+	Cmd.Flags().Bool("log-color", true, "Enable colored log output")
 	cobra.CheckErr(viper.BindPFlag(configs.STUDY_DIR, Cmd.Flags().Lookup("study-dir")))
 	cobra.CheckErr(viper.BindPFlag(configs.OUTPUT_DIR, Cmd.Flags().Lookup("output-dir")))
 	cobra.CheckErr(viper.BindPFlag(configs.STATE_DB, Cmd.Flags().Lookup("state-db")))
 	cobra.CheckErr(viper.BindPFlag(configs.CODEX_BIN, Cmd.Flags().Lookup("codex-bin")))
 	cobra.CheckErr(viper.BindPFlag(configs.DPI, Cmd.Flags().Lookup("dpi")))
+	cobra.CheckErr(viper.BindPFlag(configs.POLL_INTERVAL_SECONDS, Cmd.Flags().Lookup("poll-interval")))
+	cobra.CheckErr(viper.BindPFlag(configs.LOG_LEVEL, Cmd.Flags().Lookup("log-level")))
+	cobra.CheckErr(viper.BindPFlag(configs.LOG_COLOR, Cmd.Flags().Lookup("log-color")))
 
 	Cmd.PreRunE = func(_ *cobra.Command, _ []string) error {
 		var err error
@@ -43,23 +49,26 @@ func init() {
 }
 
 func run(cmd *cobra.Command, _ []string) (err error) {
-	logger := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: cfg.LogLevel}))
-	runner, err := workflow.New(*cfg, logger)
+	mate, err := service.New(cmd.Context(), *cfg)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err = errors.Join(err, runner.Close())
+		err = errors.Join(err, mate.Close())
 	}()
 
-	logger.Info("configuration",
-		"study_dir", cfg.StudyDir,
-		"output_dir", cfg.OutputDir,
-		"state_db", cfg.StateDB,
-		"codex_bin", cfg.CodexBin,
-		"dpi", cfg.DPI,
-		"log_level", cfg.LogLevel.String(),
-	)
-	_, err = runner.Run(cmd.Context())
-	return err
+	ctx := cmd.Context()
+	for {
+		if _, err := mate.Run(ctx); err != nil {
+			return err
+		}
+		if cfg.PollIntervalSeconds <= 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(cfg.PollIntervalSeconds):
+		}
+	}
 }

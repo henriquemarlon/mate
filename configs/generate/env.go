@@ -18,7 +18,7 @@ func (e Env) validate() error {
 		return fmt.Errorf("%s: missing description", e.Name)
 	}
 	switch e.GoType {
-	case "string", "LogLevel", "Path", "RenderDPI":
+	case "string", "Bool", "LogLevel", "Path", "RenderDPI", "Seconds":
 	default:
 		return fmt.Errorf("%s: unsupported go-type %q", e.Name, e.GoType)
 	}

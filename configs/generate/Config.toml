@@ -25,6 +25,12 @@ default = "codex"
 description = "Official Codex CLI executable name or path"
 used-by = ["mate"]
 
+[polling.MATE_POLL_INTERVAL_SECONDS]
+go-type = "Seconds"
+default = "0"
+description = "Interval in seconds between runs; 0 runs once and exits"
+used-by = ["mate"]
+
 [render.MATE_DPI]
 go-type = "RenderDPI"
 default = "250"
@@ -35,4 +41,10 @@ used-by = ["mate"]
 go-type = "LogLevel"
 default = "info"
 description = "Log level: debug, info, warn, or error"
+used-by = ["mate"]
+
+[logging.MATE_LOG_COLOR]
+go-type = "Bool"
+default = "true"
+description = "Enable colored log output"
 used-by = ["mate"]

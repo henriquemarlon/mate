@@ -10,6 +10,14 @@ Official Codex CLI executable name or path
 - Default: `codex`
 - Used by: `mate`
 
+## `MATE_LOG_COLOR`
+
+Enable colored log output
+
+- Type: `Bool`
+- Default: `true`
+- Used by: `mate`
+
 ## `MATE_LOG_LEVEL`
 
 Log level: debug, info, warn, or error
@@ -32,6 +40,14 @@ Local directory recursively scanned for GoodNotes PDF exports
 
 - Type: `Path`
 - Default: `~/GoodNotes`
+- Used by: `mate`
+
+## `MATE_POLL_INTERVAL_SECONDS`
+
+Interval in seconds between runs; 0 runs once and exits
+
+- Type: `Seconds`
+- Default: `0`
 - Used by: `mate`
 
 ## `MATE_DPI`

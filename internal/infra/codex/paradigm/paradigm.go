@@ -7,38 +7,21 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/assets"
-	"github.com/henriquemarlon/mate/internal/infra/codex"
+	"github.com/henriquemarlon/mate/pkg/codex"
 )
 
-type SourcePage struct {
-	Number   int
-	Markdown string
-}
-
-type Card struct {
-	Type  string   `json:"type"`
-	Front string   `json:"front"`
-	Back  string   `json:"back"`
-	Tags  []string `json:"tags"`
-}
-
-type Material struct {
-	Feynman string `json:"feynman"`
-	Cards   []Card `json:"cards"`
-}
-
 type Generator struct {
-	client *codex.Client
+	client codex.Codex
 }
 
-func New(client *codex.Client) *Generator {
+func New(client codex.Codex) *Generator {
 	return &Generator{client: client}
 }
 
-func (g *Generator) Generate(ctx context.Context, noteID string, pages []SourcePage) (Material, error) {
+func (g *Generator) Generate(ctx context.Context, input GenerateInput) (GenerateOutput, error) {
 	var source strings.Builder
-	fmt.Fprintf(&source, "NOTE: %s\n\n", noteID)
-	for _, page := range pages {
+	fmt.Fprintf(&source, "NOTE: %s\n\n", input.NoteID)
+	for _, page := range input.Pages {
 		fmt.Fprintf(&source, "--- PAGE %d ---\n%s\n\n", page.Number, page.Markdown)
 	}
 	result, err := g.client.Execute(ctx, codex.Request{
@@ -46,11 +29,11 @@ func (g *Generator) Generate(ctx context.Context, noteID string, pages []SourceP
 		Schema: assets.ParadigmSchemaJSON,
 	})
 	if err != nil {
-		return Material{}, fmt.Errorf("paradigm: generate material: %w", err)
+		return GenerateOutput{}, fmt.Errorf("paradigm: generate material: %w", err)
 	}
-	var material Material
+	var material GenerateOutput
 	if err := json.Unmarshal(result, &material); err != nil {
-		return Material{}, fmt.Errorf("paradigm: parse material: %w", err)
+		return GenerateOutput{}, fmt.Errorf("paradigm: parse material: %w", err)
 	}
 	return material, nil
 }

@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
         -o /bin/mate ./cmd/mate
 
 ################################################################################
-# Install the official standalone Codex package in an isolated stage.
+# Install the official standalone Codex package, including App Server support.
 FROM alpine:3.22 AS codex
 
 ARG CODEX_VERSION=0.147.0
@@ -47,7 +47,7 @@ RUN apk add --no-cache ca-certificates curl \
 
 ################################################################################
 # Create the minimal runtime image with Mate's two external runtime tools:
-# Codex for model execution and Poppler's pdftoppm for rendering PDF pages.
+# Codex App Server for model execution and Poppler's pdftoppm for PDF rendering.
 FROM alpine:3.22 AS final
 
 RUN --mount=type=cache,target=/var/cache/apk \
