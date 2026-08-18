@@ -16,14 +16,13 @@ func init() {
 }
 
 const (
-	CODEX_BIN             = "MATE_CODEX_BIN"
-	LOG_COLOR             = "MATE_LOG_COLOR"
-	LOG_LEVEL             = "MATE_LOG_LEVEL"
-	OUTPUT_DIR            = "MATE_OUTPUT_DIR"
-	STUDY_DIR             = "MATE_STUDY_DIR"
-	POLL_INTERVAL_SECONDS = "MATE_POLL_INTERVAL_SECONDS"
-	DPI                   = "MATE_DPI"
-	STATE_DB              = "MATE_STATE_DB"
+	CODEX_BIN  = "MATE_CODEX_BIN"
+	LOG_COLOR  = "MATE_LOG_COLOR"
+	LOG_LEVEL  = "MATE_LOG_LEVEL"
+	OUTPUT_DIR = "MATE_OUTPUT_DIR"
+	STUDY_DIR  = "MATE_STUDY_DIR"
+	DPI        = "MATE_DPI"
+	STATE_DB   = "MATE_STATE_DB"
 )
 
 func SetDefaults() {
@@ -32,20 +31,18 @@ func SetDefaults() {
 	viper.SetDefault(LOG_LEVEL, "info")
 	viper.SetDefault(OUTPUT_DIR, "~/.mate/output")
 	viper.SetDefault(STUDY_DIR, "~/GoodNotes")
-	viper.SetDefault(POLL_INTERVAL_SECONDS, "0")
 	viper.SetDefault(DPI, "250")
 	viper.SetDefault(STATE_DB, "~/.mate/state.db")
 }
 
 type MateConfig struct {
-	CodexBin            string
-	LogColor            Bool
-	LogLevel            LogLevel
-	OutputDir           Path
-	StudyDir            Path
-	PollIntervalSeconds Seconds
-	DPI                 RenderDPI
-	StateDB             Path
+	CodexBin  string
+	LogColor  Bool
+	LogLevel  LogLevel
+	OutputDir Path
+	StudyDir  Path
+	DPI       RenderDPI
+	StateDB   Path
 }
 
 func LoadMateConfig() (*MateConfig, error) {
@@ -76,11 +73,6 @@ func LoadMateConfig() (*MateConfig, error) {
 	cfg.StudyDir, err = GetStudyDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s: %w", STUDY_DIR, err)
-	}
-
-	cfg.PollIntervalSeconds, err = GetPollIntervalSeconds()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get %s: %w", POLL_INTERVAL_SECONDS, err)
 	}
 
 	cfg.DPI, err = GetDPI()
@@ -154,18 +146,6 @@ func GetStudyDir() (Path, error) {
 		return parsed, nil
 	}
 	return notDefinedPath(), fmt.Errorf("%s: %w", STUDY_DIR, ErrNotDefined)
-}
-
-func GetPollIntervalSeconds() (Seconds, error) {
-	value := viper.GetString(POLL_INTERVAL_SECONDS)
-	if value != "" {
-		parsed, err := toSeconds(value)
-		if err != nil {
-			return parsed, fmt.Errorf("failed to parse %s: %w", POLL_INTERVAL_SECONDS, err)
-		}
-		return parsed, nil
-	}
-	return notDefinedSeconds(), fmt.Errorf("%s: %w", POLL_INTERVAL_SECONDS, ErrNotDefined)
 }
 
 func GetDPI() (RenderDPI, error) {

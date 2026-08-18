@@ -42,14 +42,6 @@ Local directory recursively scanned for GoodNotes PDF exports
 - Default: `~/GoodNotes`
 - Used by: `mate`
 
-## `MATE_POLL_INTERVAL_SECONDS`
-
-Interval in seconds between runs; 0 runs once and exits
-
-- Type: `Seconds`
-- Default: `0`
-- Used by: `mate`
-
 ## `MATE_DPI`
 
 Resolution used when rendering PDF pages, between 72 and 600 DPI

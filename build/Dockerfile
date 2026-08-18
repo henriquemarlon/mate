@@ -50,6 +50,9 @@ RUN apk add --no-cache ca-certificates curl \
 # Codex App Server for model execution and Poppler's pdftoppm for PDF rendering.
 FROM alpine:3.22 AS final
 
+LABEL org.opencontainers.image.source="https://github.com/henriquemarlon/mate"
+LABEL org.opencontainers.image.description="Turn locally synced GoodNotes PDFs into auditable study material"
+
 RUN --mount=type=cache,target=/var/cache/apk \
     apk --update add \
         ca-certificates \

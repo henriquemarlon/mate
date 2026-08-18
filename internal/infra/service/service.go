@@ -45,7 +45,6 @@ func New(ctx context.Context, config configs.MateConfig) (*Service, error) {
 		"state_db", config.StateDB,
 		"codex_bin", config.CodexBin,
 		"dpi", config.DPI,
-		"poll_interval", config.PollIntervalSeconds,
 		"log_level", config.LogLevel.String(),
 		"log_color", config.LogColor,
 	)

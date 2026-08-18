@@ -40,42 +40,41 @@ go run ./cmd/mate run \
 
 The generated [configuration reference](docs/config.md) documents the equivalent environment variables and defaults. Its source of truth is `configs/generate/Config.toml`.
 
-## Run iteratively with Docker
+## Run once with Docker
 
-Build the image with the host user ID so the container can write to the mounted state directory:
+Create the persistent output directory. Docker downloads the public image automatically when it is not available locally:
 
 ```bash
-docker build -f build/Dockerfile --build-arg UID="$(id -u)" -t mate .
 mkdir -p "$HOME/.mate/output"
 ```
 
-Run Mate every 15 minutes. The GoodNotes directory is read-only; the SQLite database and generated artifacts persist under `~/.mate`; and the Codex authentication already created by `codex login` is shared with the container:
+Run one scan. The GoodNotes directory is read-only; the SQLite database and generated artifacts persist under `~/.mate`; and the Codex authentication already created by `codex login` is shared with the container:
 
 ```bash
 docker run --rm --init \
-  --name mate \
+  --pull=missing \
   -v "$HOME/GoodNotes:/notes:ro" \
   -v "$HOME/.mate:/home/mate/.mate" \
   -v "$HOME/.codex:/home/mate/.codex" \
-  mate run \
+  ghcr.io/henriquemarlon/mate:latest run \
   --study-dir=/notes \
   --output-dir=/home/mate/.mate/output \
-  --state-db=/home/mate/.mate/state.db \
-  --poll-interval=900
+  --state-db=/home/mate/.mate/state.db
 ```
 
-Stop the loop with `docker stop mate`. Every iteration scans the directory again, but unchanged page hashes are skipped before reaching Codex. Change `--poll-interval` to use another interval, or omit it (or pass `0`) to run once and exit.
+The container exits when the scan finishes. Schedule repeated executions with the host operating system; unchanged page hashes are skipped before reaching Codex. Run `docker pull ghcr.io/henriquemarlon/mate:latest` when you want to update an image that is already cached locally.
 
 ## Run automatically on macOS
 
-The launchd agent under `init/launchd` runs `mate run` on login and every 15 minutes. It assumes the Mate binary is installed at `/usr/local/bin/mate`.
+The launchd agent under `init/launchd` runs the public Docker image once on login and every 15 minutes. It uses `/usr/local/bin/docker` and the fixed `/Users/henriquemarlon` paths, so Docker Desktop must be running and Codex must already be authenticated under `/Users/henriquemarlon/.codex`.
 
 ```bash
+mkdir -p /Users/henriquemarlon/.mate/output
 cp init/launchd/com.henriquemarlon.mate.plist ~/Library/LaunchAgents/
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.mate.plist
 ```
 
-Mate scans the configured study directory on each invocation. Page hashes stored in SQLite ensure unchanged pages are ignored.
+Each launchd invocation creates a disposable container, runs one scan, and exits. Page hashes stored in SQLite ensure unchanged pages are ignored. Logs are written to `/Users/henriquemarlon/.mate/launchd.stdout.log` and `/Users/henriquemarlon/.mate/launchd.stderr.log`.
 
 ## Processing rules
 

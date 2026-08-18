@@ -7,8 +7,23 @@
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/local/bin/mate</string>
+		<string>/usr/local/bin/docker</string>
 		<string>run</string>
+		<string>--rm</string>
+		<string>--init</string>
+		<string>--pull=missing</string>
+		<string>-v</string>
+		<string>/Users/henriquemarlon/GoodNotes:/notes:ro</string>
+		<string>-v</string>
+		<string>/Users/henriquemarlon/.mate:/home/mate/.mate</string>
+		<string>-v</string>
+		<string>/Users/henriquemarlon/.codex:/home/mate/.codex</string>
+		<string>ghcr.io/henriquemarlon/mate:latest</string>
+		<string>run</string>
+		<string>--study-dir=/notes</string>
+		<string>--output-dir=/home/mate/.mate/output</string>
+		<string>--state-db=/home/mate/.mate/state.db</string>
+		<string>--log-color=false</string>
 	</array>
 
 	<key>RunAtLoad</key>
@@ -19,5 +34,11 @@
 
 	<key>ProcessType</key>
 	<string>Background</string>
+
+	<key>StandardOutPath</key>
+	<string>/Users/henriquemarlon/.mate/launchd.stdout.log</string>
+
+	<key>StandardErrorPath</key>
+	<string>/Users/henriquemarlon/.mate/launchd.stderr.log</string>
 </dict>
 </plist>
