@@ -16,16 +16,20 @@ func init() {
 }
 
 const (
-	CODEX_BIN  = "MATE_CODEX_BIN"
-	LOG_COLOR  = "MATE_LOG_COLOR"
-	LOG_LEVEL  = "MATE_LOG_LEVEL"
-	OUTPUT_DIR = "MATE_OUTPUT_DIR"
-	STUDY_DIR  = "MATE_STUDY_DIR"
-	DPI        = "MATE_DPI"
-	STATE_DB   = "MATE_STATE_DB"
+	ANKI_DECK     = "MATE_ANKI_DECK"
+	ANKI_ENDPOINT = "MATE_ANKI_ENDPOINT"
+	CODEX_BIN     = "MATE_CODEX_BIN"
+	LOG_COLOR     = "MATE_LOG_COLOR"
+	LOG_LEVEL     = "MATE_LOG_LEVEL"
+	OUTPUT_DIR    = "MATE_OUTPUT_DIR"
+	STUDY_DIR     = "MATE_STUDY_DIR"
+	DPI           = "MATE_DPI"
+	STATE_DB      = "MATE_STATE_DB"
 )
 
 func SetDefaults() {
+	viper.SetDefault(ANKI_DECK, "Mate")
+	viper.SetDefault(ANKI_ENDPOINT, "http://127.0.0.1:8765")
 	viper.SetDefault(CODEX_BIN, "codex")
 	viper.SetDefault(LOG_COLOR, "true")
 	viper.SetDefault(LOG_LEVEL, "info")
@@ -36,19 +40,31 @@ func SetDefaults() {
 }
 
 type MateConfig struct {
-	CodexBin  string
-	LogColor  Bool
-	LogLevel  LogLevel
-	OutputDir Path
-	StudyDir  Path
-	DPI       RenderDPI
-	StateDB   Path
+	AnkiDeck     string
+	AnkiEndpoint string
+	CodexBin     string
+	LogColor     Bool
+	LogLevel     LogLevel
+	OutputDir    Path
+	StudyDir     Path
+	DPI          RenderDPI
+	StateDB      Path
 }
 
 func LoadMateConfig() (*MateConfig, error) {
 	SetDefaults()
 	var cfg MateConfig
 	var err error
+
+	cfg.AnkiDeck, err = GetAnkiDeck()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", ANKI_DECK, err)
+	}
+
+	cfg.AnkiEndpoint, err = GetAnkiEndpoint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", ANKI_ENDPOINT, err)
+	}
 
 	cfg.CodexBin, err = GetCodexBin()
 	if err != nil {
@@ -86,6 +102,30 @@ func LoadMateConfig() (*MateConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+func GetAnkiDeck() (string, error) {
+	value := viper.GetString(ANKI_DECK)
+	if value != "" {
+		parsed, err := toString(value)
+		if err != nil {
+			return parsed, fmt.Errorf("failed to parse %s: %w", ANKI_DECK, err)
+		}
+		return parsed, nil
+	}
+	return notDefinedstring(), fmt.Errorf("%s: %w", ANKI_DECK, ErrNotDefined)
+}
+
+func GetAnkiEndpoint() (string, error) {
+	value := viper.GetString(ANKI_ENDPOINT)
+	if value != "" {
+		parsed, err := toString(value)
+		if err != nil {
+			return parsed, fmt.Errorf("failed to parse %s: %w", ANKI_ENDPOINT, err)
+		}
+		return parsed, nil
+	}
+	return notDefinedstring(), fmt.Errorf("%s: %w", ANKI_ENDPOINT, ErrNotDefined)
 }
 
 func GetCodexBin() (string, error) {

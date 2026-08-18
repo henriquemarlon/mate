@@ -19,6 +19,18 @@ default = "~/.mate/state.db"
 description = "SQLite database used to track observed and processed pages"
 used-by = ["mate"]
 
+[anki.MATE_ANKI_ENDPOINT]
+go-type = "string"
+default = "http://127.0.0.1:8765"
+description = "AnkiConnect HTTP endpoint used to synchronize generated cards"
+used-by = ["mate"]
+
+[anki.MATE_ANKI_DECK]
+go-type = "string"
+default = "Mate"
+description = "Root Anki deck; each source PDF is synchronized to a child deck"
+used-by = ["mate"]
+
 [codex.MATE_CODEX_BIN]
 go-type = "string"
 default = "codex"

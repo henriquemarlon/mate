@@ -2,6 +2,22 @@
 
 # Mate configuration
 
+## `MATE_ANKI_DECK`
+
+Root Anki deck; each source PDF is synchronized to a child deck
+
+- Type: `string`
+- Default: `Mate`
+- Used by: `mate`
+
+## `MATE_ANKI_ENDPOINT`
+
+AnkiConnect HTTP endpoint used to synchronize generated cards
+
+- Type: `string`
+- Default: `http://127.0.0.1:8765`
+- Used by: `mate`
+
 ## `MATE_CODEX_BIN`
 
 Official Codex CLI executable name or path

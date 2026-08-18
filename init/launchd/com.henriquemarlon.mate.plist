@@ -23,6 +23,7 @@
 		<string>--study-dir=/notes</string>
 		<string>--output-dir=/home/mate/.mate/output</string>
 		<string>--state-db=/home/mate/.mate/state.db</string>
+		<string>--anki-endpoint=http://host.docker.internal:8765</string>
 		<string>--log-color=false</string>
 	</array>
 

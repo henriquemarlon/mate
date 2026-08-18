@@ -12,6 +12,7 @@ import (
 
 	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/domain/entity"
+	"github.com/henriquemarlon/mate/internal/infra/anki"
 	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
 	"github.com/henriquemarlon/mate/internal/infra/codex/transcriber"
 	"github.com/henriquemarlon/mate/internal/infra/repository"
@@ -32,6 +33,7 @@ type Service struct {
 	codex       codex.Codex
 	transcriber *transcriber.Transcriber
 	paradigm    *paradigm.Generator
+	anki        *anki.Client
 	logger      *slog.Logger
 }
 
@@ -44,6 +46,8 @@ func New(ctx context.Context, config configs.MateConfig) (*Service, error) {
 		"output_dir", config.OutputDir,
 		"state_db", config.StateDB,
 		"codex_bin", config.CodexBin,
+		"anki_endpoint", config.AnkiEndpoint,
+		"anki_deck", config.AnkiDeck,
 		"dpi", config.DPI,
 		"log_level", config.LogLevel.String(),
 		"log_color", config.LogColor,
@@ -67,12 +71,19 @@ func New(ctx context.Context, config configs.MateConfig) (*Service, error) {
 		repo.Close()
 		return nil, fmt.Errorf("workflow: start codex app server (check MATE_CODEX_BIN or --codex-bin): %w", err)
 	}
+	ankiClient, err := anki.New(config.AnkiEndpoint, config.AnkiDeck)
+	if err != nil {
+		codexClient.Close()
+		repo.Close()
+		return nil, err
+	}
 	return &Service{
 		config:      config,
 		repo:        repo,
 		codex:       codexClient,
 		transcriber: transcriber.New(codexClient),
 		paradigm:    paradigm.New(codexClient),
+		anki:        ankiClient,
 		logger:      logger,
 	}, nil
 }
@@ -212,24 +223,39 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 	if err := writeTranscript(s.config.OutputDir, noteID, processed); err != nil {
 		return result, err
 	}
-	sourcePages := make([]paradigm.SourcePage, 0, len(pendingGeneration))
-	for _, page := range pendingGeneration {
-		sourcePages = append(sourcePages, paradigm.SourcePage{Number: page.PageNumber, Markdown: page.Transcription})
-	}
-	material, err := s.paradigm.Generate(ctx, paradigm.GenerateInput{NoteID: noteID, Pages: sourcePages})
+	material, stored, generated, err := s.material(ctx, noteID, processed, pendingGeneration)
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
 			return result, err
 		}
-		// Pages stay transcribed, so the next run retries generation.
-		s.logger.Error("study material generation failed; will retry next run", "note", noteID, "error", err)
+		// Pages stay transcribed, so the next run retries generation or sync.
+		s.logger.Error("study material unavailable; will retry next run", "note", noteID, "error", err)
 		return result, nil
 	}
-	for i := range material.Cards {
-		material.Cards[i].Tags = append(material.Cards[i].Tags, "mate")
+	if generated {
+		s.logger.Info("study material generated", "note", noteID, "cards", len(material.Cards))
 	}
 	if err := writeMaterial(s.config.OutputDir, noteID, material); err != nil {
 		return result, err
+	}
+	if !stored.IsSynced() {
+		summary, err := s.anki.Sync(ctx, noteID, ankiCards(material.Cards))
+		if err != nil {
+			if ctx.Err() != nil {
+				return result, err
+			}
+			// The material is already persisted. A later one-shot run can retry
+			// Anki without spending another Codex turn.
+			s.logger.Error("Anki sync failed; will retry next run", "note", noteID, "error", err)
+			return result, nil
+		}
+		if err := stored.MarkSynced(); err != nil {
+			return result, err
+		}
+		if err := s.repo.SaveMaterial(stored); err != nil {
+			return result, err
+		}
+		s.logger.Info("cards synchronized with Anki", "note", noteID, "created", summary.Created, "updated", summary.Updated)
 	}
 	if err := s.markPagesDone(pendingGeneration); err != nil {
 		return result, err

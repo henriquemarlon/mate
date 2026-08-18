@@ -11,7 +11,13 @@ type PageRepository interface {
 	FindPagesByStatus(noteID string, status entity.PageStatus) ([]entity.Page, error)
 }
 
+type MaterialRepository interface {
+	SaveMaterial(material *entity.Material) error
+	FindMaterial(noteID string) (entity.Material, error)
+}
+
 type Repository interface {
 	PageRepository
+	MaterialRepository
 	Close() error
 }

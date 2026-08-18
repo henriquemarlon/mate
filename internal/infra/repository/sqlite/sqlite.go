@@ -73,7 +73,7 @@ func NewSQLiteRepository(ctx context.Context, conn string) (*SQLiteRepository, e
 		return nil, fmt.Errorf("failed to ping SQLite: %w", err)
 	}
 
-	if err := db.AutoMigrate(&entity.Page{}); err != nil {
+	if err := db.AutoMigrate(&entity.Page{}, &entity.Material{}); err != nil {
 		return nil, fmt.Errorf("failed to auto-migrate tables: %w", err)
 	}
 
