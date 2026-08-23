@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.henriquemarlon.anki</string>
+
+	<!-- open -g does not steal focus, -j launches hidden, and the whole
+	     command is a no-op when Anki is already running, so the periodic
+	     relaunch below never disturbs an open session. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/open</string>
+		<string>-gja</string>
+		<string>Anki</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<!-- Reopen Anki within 5 minutes of a manual quit so AnkiConnect is
+	     back before Mate's next sync tick. -->
+	<key>StartInterval</key>
+	<integer>300</integer>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

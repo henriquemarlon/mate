@@ -72,15 +72,21 @@ The container stays up and rescans the study directory every `MATE_POLL_INTERVAL
 
 ## Run automatically on macOS
 
-The launchd agent under `init/launchd` starts the public Docker image on login and keeps it alive (`KeepAlive`): if the container exits, launchd restarts it. It uses `/usr/local/bin/docker` and the fixed `/Users/henriquemarlon` paths, so Docker Desktop and Anki Desktop must be running and Codex must already be authenticated under `/Users/henriquemarlon/.codex`.
+Two launchd agents live under `init/launchd`:
+
+- `com.henriquemarlon.mate.plist` runs the Mate binary directly on login and keeps it alive (`KeepAlive`): if the daemon exits, launchd restarts it. It expects the binary at `/usr/local/bin/mate`, the Codex CLI and Poppler's `pdftoppm` under Homebrew's `/opt/homebrew/bin`, and the fixed `/Users/henriquemarlon` paths.
+- `com.henriquemarlon.anki.plist` opens Anki Desktop hidden in the background on login and re-opens it within 5 minutes after a manual quit, so AnkiConnect is available again before Mate's next sync tick. Re-opening is a no-op while Anki is already running.
 
 ```bash
+go build -o /usr/local/bin/mate ./cmd/mate
 mkdir -p /Users/henriquemarlon/.mate/output
 cp init/launchd/com.henriquemarlon.mate.plist ~/Library/LaunchAgents/
+cp init/launchd/com.henriquemarlon.anki.plist ~/Library/LaunchAgents/
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.mate.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.anki.plist
 ```
 
-The container polls the study directory on the configured interval. Page hashes stored in SQLite ensure unchanged pages are ignored. Logs are written to `/Users/henriquemarlon/.mate/launchd.stdout.log` and `/Users/henriquemarlon/.mate/launchd.stderr.log`.
+The daemon polls the study directory on the configured interval. Page hashes stored in SQLite ensure unchanged pages are ignored; a sync attempted while Anki is closed is retried on the next tick. Logs are written to `/Users/henriquemarlon/.mate/launchd.stdout.log` and `/Users/henriquemarlon/.mate/launchd.stderr.log`.
 
 ## Processing rules
 

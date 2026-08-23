@@ -68,5 +68,5 @@ func NewLogger(name string, level slog.Level, color bool) *slog.Logger {
 		TimeFormat: "2006-01-02T15:04:05.000",
 		NoColor:    !color,
 	}
-	return slog.New(tint.NewHandler(os.Stdout, opts)).With("service", name)
+	return slog.New(tint.NewTextHandler(os.Stdout, opts)).With("service", name)
 }

@@ -7,25 +7,22 @@
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/local/bin/docker</string>
+		<string>/usr/local/bin/mate</string>
 		<string>run</string>
-		<string>--rm</string>
-		<string>--init</string>
-		<string>--pull=missing</string>
-		<string>-v</string>
-		<string>/Users/henriquemarlon/GoodNotes:/notes:ro</string>
-		<string>-v</string>
-		<string>/Users/henriquemarlon/.mate:/home/mate/.mate</string>
-		<string>-v</string>
-		<string>/Users/henriquemarlon/.codex:/home/mate/.codex</string>
-		<string>ghcr.io/henriquemarlon/mate:latest</string>
-		<string>run</string>
-		<string>--study-dir=/notes</string>
-		<string>--output-dir=/home/mate/.mate/output</string>
-		<string>--state-db=/home/mate/.mate/state.db</string>
-		<string>--anki-endpoint=http://host.docker.internal:8765</string>
+		<string>--study-dir=/Users/henriquemarlon/GoodNotes</string>
+		<string>--output-dir=/Users/henriquemarlon/.mate/output</string>
+		<string>--state-db=/Users/henriquemarlon/.mate/state.db</string>
+		<string>--anki-endpoint=http://127.0.0.1:8765</string>
 		<string>--log-color=false</string>
 	</array>
+
+	<!-- launchd starts agents with a minimal PATH; the Codex CLI and
+	     Poppler's pdftoppm live under Homebrew. -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
 
 	<key>RunAtLoad</key>
 	<true/>
