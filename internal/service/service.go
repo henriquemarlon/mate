@@ -15,10 +15,21 @@ import (
 	"github.com/henriquemarlon/mate/internal/infra/anki"
 	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
 	"github.com/henriquemarlon/mate/internal/infra/codex/transcriber"
-	"github.com/henriquemarlon/mate/internal/infra/repository"
-	"github.com/henriquemarlon/mate/internal/infra/repository/sqlite"
 	"github.com/henriquemarlon/mate/pkg/codex"
+	"github.com/henriquemarlon/mate/pkg/service"
 )
+
+// Repository defines the persistence interface needed by the Mate service.
+type Repository interface {
+	CreatePage(page *entity.Page) error
+	FindPage(noteID string, pageNumber int) (entity.Page, error)
+	UpdatePage(page *entity.Page) error
+	UpdatePages(pages []entity.Page) error
+	FindProcessedPages(noteID string) ([]entity.Page, error)
+	FindPagesByStatus(noteID string, status entity.PageStatus) ([]entity.Page, error)
+	SaveMaterial(material *entity.Material) error
+	FindMaterial(noteID string) (entity.Material, error)
+}
 
 type Summary struct {
 	NotesProcessed int
@@ -28,71 +39,89 @@ type Summary struct {
 }
 
 type Service struct {
+	service.TickServiceTemplate
 	config      configs.MateConfig
-	repo        repository.Repository
-	codex       codex.Codex
+	repo        Repository
 	transcriber *transcriber.Transcriber
 	paradigm    *paradigm.Generator
 	anki        *anki.Client
-	logger      *slog.Logger
 }
 
-const serviceName = "mate"
+var _ service.SupervisedService = (*Service)(nil)
+var _ service.TickImpl = (*Service)(nil)
 
-func New(ctx context.Context, config configs.MateConfig) (*Service, error) {
-	logger := NewServiceLogger(serviceName, config.LogLevel, config.LogColor)
-	logger.Info("starting service",
-		"study_dir", config.StudyDir,
-		"output_dir", config.OutputDir,
-		"state_db", config.StateDB,
-		"codex_bin", config.CodexBin,
-		"anki_endpoint", config.AnkiEndpoint,
-		"anki_deck", config.AnkiDeck,
-		"dpi", config.DPI,
-		"log_level", config.LogLevel.String(),
-		"log_color", config.LogColor,
-	)
-	info, err := os.Stat(config.StudyDir)
+const ServiceName = "mate"
+
+// CreateInfo contains the configuration for creating the Mate service.
+type CreateInfo struct {
+	Config     configs.MateConfig
+	Logger     *slog.Logger
+	Repository Repository
+	Codex      codex.Codex
+	Anki       *anki.Client
+}
+
+// Create initializes the Mate service from already-acquired dependencies.
+// Resource lifetimes stay with the caller.
+func Create(ctx context.Context, c *CreateInfo) (*Service, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.Repository == nil {
+		return nil, fmt.Errorf("repository on mate service Create is nil")
+	}
+	if c.Codex == nil {
+		return nil, fmt.Errorf("codex client on mate service Create is nil")
+	}
+	if c.Anki == nil {
+		return nil, fmt.Errorf("anki client on mate service Create is nil")
+	}
+	info, err := os.Stat(c.Config.StudyDir)
 	if err != nil {
 		return nil, fmt.Errorf("workflow: study directory: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("workflow: study path is not a directory: %s", config.StudyDir)
+		return nil, fmt.Errorf("workflow: study path is not a directory: %s", c.Config.StudyDir)
 	}
-	if err := os.MkdirAll(config.OutputDir, 0o755); err != nil {
+	if err := os.MkdirAll(c.Config.OutputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("workflow: create output directory: %w", err)
 	}
-	repo, err := sqlite.NewSQLiteRepository(ctx, config.StateDB)
-	if err != nil {
+
+	s := &Service{
+		config:      c.Config,
+		repo:        c.Repository,
+		transcriber: transcriber.New(c.Codex),
+		paradigm:    paradigm.New(c.Codex),
+		anki:        c.Anki,
+	}
+	if err := service.InitTickServiceTemplate(&s.TickServiceTemplate, &service.TickServiceConfigs{
+		BaseConfigs: service.BaseConfigs{
+			Name:     ServiceName,
+			Logger:   c.Logger,
+			LogLevel: c.Config.LogLevel,
+			LogColor: c.Config.LogColor,
+		},
+		PollInterval: c.Config.PollIntervalSeconds,
+	}, s); err != nil {
 		return nil, err
 	}
-	codexClient, err := codex.New(ctx, codex.Config{Binary: config.CodexBin, Logger: logger})
-	if err != nil {
-		repo.Close()
-		return nil, fmt.Errorf("workflow: start codex app server (check MATE_CODEX_BIN or --codex-bin): %w", err)
-	}
-	ankiClient, err := anki.New(config.AnkiEndpoint, config.AnkiDeck)
-	if err != nil {
-		codexClient.Close()
-		repo.Close()
-		return nil, err
-	}
-	return &Service{
-		config:      config,
-		repo:        repo,
-		codex:       codexClient,
-		transcriber: transcriber.New(codexClient),
-		paradigm:    paradigm.New(codexClient),
-		anki:        ankiClient,
-		logger:      logger,
-	}, nil
+
+	s.Logger.Info("Created", "config", c.Config)
+	return s, nil
 }
 
-func (s *Service) Close() error {
-	return errors.Join(s.codex.Close(), s.repo.Close())
+// Tick scans the study directory once. A dead app server is terminal for the
+// daemon: every future tick would fail, so it is escalated through
+// service.ErrServiceStopped to abort Serve.
+func (s *Service) Tick(ctx context.Context) (bool, error) {
+	_, err := s.run(ctx)
+	if errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
+		return false, errors.Join(service.ErrServiceStopped, err)
+	}
+	return false, err
 }
 
-func (s *Service) Run(ctx context.Context) (Summary, error) {
+func (s *Service) run(ctx context.Context) (Summary, error) {
 	var result Summary
 	err := filepath.WalkDir(s.config.StudyDir, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -110,7 +139,7 @@ func (s *Service) Run(ctx context.Context) (Summary, error) {
 			if ctx.Err() != nil || errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
 				return err
 			}
-			s.logger.Error("note failed; continuing with next note", "note", path, "error", err)
+			s.Logger.Error("note failed; continuing with next note", "note", path, "error", err)
 			result.NotesFailed++
 			return nil
 		}
@@ -122,7 +151,7 @@ func (s *Service) Run(ctx context.Context) (Summary, error) {
 	if err != nil {
 		return result, fmt.Errorf("workflow: scan study directory: %w", err)
 	}
-	s.logger.Info("run complete",
+	s.Logger.Info("run complete",
 		"notes", result.NotesProcessed,
 		"notes_failed", result.NotesFailed,
 		"pages", result.PagesProcessed,
@@ -138,7 +167,7 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		return result, fmt.Errorf("workflow: relative note path: %w", err)
 	}
 	noteID := filepath.ToSlash(relative)
-	s.logger.Info("rendering note", "note", noteID)
+	s.Logger.Info("rendering note", "note", noteID)
 	renderDir, pages, err := renderPDF(ctx, pdfPath, s.config.DPI)
 	if err != nil {
 		return result, err
@@ -165,15 +194,15 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 			continue
 		}
 
-		s.logger.Info("transcribing page", "note", noteID, "page", page.Number)
-		transcription, err := s.transcriber.Transcribe(ctx, pagePNG)
+		s.Logger.Info("transcribing page", "note", noteID, "page", page.Number)
+		transcription, err := s.transcriber.Transcribe(ctx, transcriber.TranscribeInputDTO{ImageData: pagePNG})
 		if err != nil {
 			if ctx.Err() != nil || errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
 				return result, err
 			}
 			// A failed turn is page-scoped: send the page to review and
 			// keep going instead of dropping the rest of the note.
-			s.logger.Warn("transcription failed; page sent to review", "note", noteID, "page", page.Number, "error", err)
+			s.Logger.Warn("transcription failed; page sent to review", "note", noteID, "page", page.Number, "error", err)
 			if err := s.markPageNeedsReview(noteID, page.Number, page.Hash, ""); err != nil {
 				return result, err
 			}
@@ -229,24 +258,24 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 			return result, err
 		}
 		// Pages stay transcribed, so the next run retries generation or sync.
-		s.logger.Error("study material unavailable; will retry next run", "note", noteID, "error", err)
+		s.Logger.Error("study material unavailable; will retry next run", "note", noteID, "error", err)
 		return result, nil
 	}
 	if generated {
-		s.logger.Info("study material generated", "note", noteID, "cards", len(material.Cards))
+		s.Logger.Info("study material generated", "note", noteID, "cards", len(material.Cards))
 	}
 	if err := writeMaterial(s.config.OutputDir, noteID, material); err != nil {
 		return result, err
 	}
 	if !stored.IsSynced() {
-		summary, err := s.anki.Sync(ctx, noteID, ankiCards(material.Cards))
+		summary, err := s.anki.Sync(ctx, anki.SyncInputDTO{NoteID: noteID, Cards: material.Cards})
 		if err != nil {
 			if ctx.Err() != nil {
 				return result, err
 			}
 			// The material is already persisted. A later one-shot run can retry
 			// Anki without spending another Codex turn.
-			s.logger.Error("Anki sync failed; will retry next run", "note", noteID, "error", err)
+			s.Logger.Error("Anki sync failed; will retry next run", "note", noteID, "error", err)
 			return result, nil
 		}
 		if err := stored.MarkSynced(); err != nil {
@@ -255,95 +284,10 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		if err := s.repo.SaveMaterial(stored); err != nil {
 			return result, err
 		}
-		s.logger.Info("cards synchronized with Anki", "note", noteID, "created", summary.Created, "updated", summary.Updated)
+		s.Logger.Info("cards synchronized with Anki", "note", noteID, "created", summary.Created, "updated", summary.Updated)
 	}
 	if err := s.markPagesDone(pendingGeneration); err != nil {
 		return result, err
 	}
 	return result, nil
-}
-
-func (s *Service) observePage(noteID string, pageNumber int, hash string) (entity.PageAction, error) {
-	if strings.TrimSpace(hash) == "" {
-		return "", fmt.Errorf("%w: observed hash cannot be empty", entity.ErrInvalidPage)
-	}
-
-	page, err := s.repo.FindPage(noteID, pageNumber)
-	if errors.Is(err, entity.ErrPageNotFound) {
-		page, err := entity.NewPage(noteID, pageNumber, hash, entity.PageStatusPending)
-		if err != nil {
-			return "", err
-		}
-		if err := s.repo.CreatePage(page); err != nil {
-			return "", err
-		}
-		return entity.PageActionProcess, nil
-	}
-	if err != nil {
-		return "", err
-	}
-	if page.ProcessedHash == hash {
-		return entity.PageActionIgnore, nil
-	}
-	if page.ProcessedHash == "" && page.Status == entity.PageStatusNeedsReview && page.ObservedHash == hash {
-		return entity.PageActionIgnore, nil
-	}
-
-	page.ObservedHash = hash
-	if page.ProcessedHash == "" {
-		page.Status = entity.PageStatusPending
-		if err := s.repo.UpdatePage(&page); err != nil {
-			return "", err
-		}
-		return entity.PageActionProcess, nil
-	}
-	page.Status = entity.PageStatusNeedsReview
-	if err := s.repo.UpdatePage(&page); err != nil {
-		return "", err
-	}
-	return entity.PageActionNeedsReview, nil
-}
-
-func (s *Service) markPageProcessed(noteID string, pageNumber int, hash, transcription string, status entity.PageStatus) error {
-	if strings.TrimSpace(hash) == "" {
-		return fmt.Errorf("%w: processed hash cannot be empty", entity.ErrInvalidPage)
-	}
-	if status != entity.PageStatusTranscribed && status != entity.PageStatusSkipped {
-		return fmt.Errorf("%w: cannot mark page as processed with status %q", entity.ErrInvalidPage, status)
-	}
-
-	page, err := s.repo.FindPage(noteID, pageNumber)
-	if err != nil {
-		return err
-	}
-	page.ObservedHash = hash
-	page.ProcessedHash = hash
-	page.Transcription = transcription
-	page.Status = status
-	return s.repo.UpdatePage(&page)
-}
-
-func (s *Service) markPageNeedsReview(noteID string, pageNumber int, hash, transcription string) error {
-	if strings.TrimSpace(hash) == "" {
-		return fmt.Errorf("%w: review hash cannot be empty", entity.ErrInvalidPage)
-	}
-
-	page, err := s.repo.FindPage(noteID, pageNumber)
-	if err != nil {
-		return err
-	}
-	page.ObservedHash = hash
-	page.Transcription = transcription
-	page.Status = entity.PageStatusNeedsReview
-	return s.repo.UpdatePage(&page)
-}
-
-func (s *Service) markPagesDone(pages []entity.Page) error {
-	for i := range pages {
-		if pages[i].Status != entity.PageStatusTranscribed {
-			return fmt.Errorf("%w: only a transcribed page can be completed", entity.ErrInvalidPage)
-		}
-		pages[i].Status = entity.PageStatusDone
-	}
-	return s.repo.UpdatePages(pages)
 }

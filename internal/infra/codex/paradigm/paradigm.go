@@ -7,8 +7,24 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/assets"
+	"github.com/henriquemarlon/mate/internal/domain/entity"
 	"github.com/henriquemarlon/mate/pkg/codex"
 )
+
+type SourcePage struct {
+	Number   int
+	Markdown string
+}
+
+type GenerateInputDTO struct {
+	NoteID string
+	Pages  []SourcePage
+}
+
+type GenerateOutputDTO struct {
+	Feynman string        `json:"feynman"`
+	Cards   []entity.Card `json:"cards"`
+}
 
 type Generator struct {
 	client codex.Codex
@@ -18,7 +34,7 @@ func New(client codex.Codex) *Generator {
 	return &Generator{client: client}
 }
 
-func (g *Generator) Generate(ctx context.Context, input GenerateInput) (GenerateOutput, error) {
+func (g *Generator) Generate(ctx context.Context, input GenerateInputDTO) (GenerateOutputDTO, error) {
 	var source strings.Builder
 	fmt.Fprintf(&source, "NOTE: %s\n\n", input.NoteID)
 	for _, page := range input.Pages {
@@ -29,11 +45,11 @@ func (g *Generator) Generate(ctx context.Context, input GenerateInput) (Generate
 		Schema: assets.ParadigmSchemaJSON,
 	})
 	if err != nil {
-		return GenerateOutput{}, fmt.Errorf("paradigm: generate material: %w", err)
+		return GenerateOutputDTO{}, fmt.Errorf("paradigm: generate material: %w", err)
 	}
-	var material GenerateOutput
+	var material GenerateOutputDTO
 	if err := json.Unmarshal(result, &material); err != nil {
-		return GenerateOutput{}, fmt.Errorf("paradigm: parse material: %w", err)
+		return GenerateOutputDTO{}, fmt.Errorf("paradigm: parse material: %w", err)
 	}
 	return material, nil
 }

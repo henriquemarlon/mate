@@ -30,8 +30,8 @@
 	<key>RunAtLoad</key>
 	<true/>
 
-	<key>StartInterval</key>
-	<integer>900</integer>
+	<key>KeepAlive</key>
+	<true/>
 
 	<key>ProcessType</key>
 	<string>Background</string>

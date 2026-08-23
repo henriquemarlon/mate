@@ -45,7 +45,7 @@ go run ./cmd/mate run \
 
 The generated [configuration reference](docs/config.md) documents the equivalent environment variables and defaults. Its source of truth is `configs/generate/Config.toml`.
 
-## Run once with Docker
+## Run as a daemon with Docker
 
 Create the persistent output directory. Docker downloads the public image automatically when it is not available locally:
 
@@ -68,11 +68,11 @@ docker run --rm --init \
   --anki-endpoint=http://host.docker.internal:8765
 ```
 
-The container exits when the scan finishes. `host.docker.internal` lets the container reach AnkiConnect in Anki Desktop on the Mac. Schedule repeated executions with the host operating system; unchanged page hashes are skipped before reaching Codex. Run `docker pull ghcr.io/henriquemarlon/mate:latest` when you want to update an image that is already cached locally.
+The container stays up and rescans the study directory every `MATE_POLL_INTERVAL_SECONDS` (default 900; override with `--poll-interval`). Unchanged page hashes are skipped before reaching Codex, so idle scans are cheap. Stop it with `docker stop`. `host.docker.internal` lets the container reach AnkiConnect in Anki Desktop on the Mac. Run `docker pull ghcr.io/henriquemarlon/mate:latest` when you want to update an image that is already cached locally.
 
 ## Run automatically on macOS
 
-The launchd agent under `init/launchd` runs the public Docker image once on login and every 15 minutes. It uses `/usr/local/bin/docker` and the fixed `/Users/henriquemarlon` paths, so Docker Desktop and Anki Desktop must be running and Codex must already be authenticated under `/Users/henriquemarlon/.codex`.
+The launchd agent under `init/launchd` starts the public Docker image on login and keeps it alive (`KeepAlive`): if the container exits, launchd restarts it. It uses `/usr/local/bin/docker` and the fixed `/Users/henriquemarlon` paths, so Docker Desktop and Anki Desktop must be running and Codex must already be authenticated under `/Users/henriquemarlon/.codex`.
 
 ```bash
 mkdir -p /Users/henriquemarlon/.mate/output
@@ -80,7 +80,7 @@ cp init/launchd/com.henriquemarlon.mate.plist ~/Library/LaunchAgents/
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.mate.plist
 ```
 
-Each launchd invocation creates a disposable container, runs one scan, and exits. Page hashes stored in SQLite ensure unchanged pages are ignored. Logs are written to `/Users/henriquemarlon/.mate/launchd.stdout.log` and `/Users/henriquemarlon/.mate/launchd.stderr.log`.
+The container polls the study directory on the configured interval. Page hashes stored in SQLite ensure unchanged pages are ignored. Logs are written to `/Users/henriquemarlon/.mate/launchd.stdout.log` and `/Users/henriquemarlon/.mate/launchd.stderr.log`.
 
 ## Processing rules
 
@@ -126,8 +126,10 @@ configs/generate                 declarative configuration generator
 internal/domain/entity           persisted entities and typed lifecycle status
 internal/infra/repository        repository contract and SQLite persistence
 internal/infra/anki              deterministic AnkiConnect client and card upsert
-internal/infra/service           workflow, rendering, hashing, and artifact publication
+internal/service                 application workflow, rendering, hashing, and artifact publication
+pkg/ankiconnect                  reusable AnkiConnect protocol client
 pkg/codex                        reusable Codex App Server client and stdio backend
+pkg/service                      daemon templates: base service, logger, tick loop
 internal/infra/codex/transcriber Mate-specific visual classification and transcription
 internal/infra/codex/paradigm    Mate-specific transcript -> Feynman + cards
 init/launchd                     macOS periodic execution

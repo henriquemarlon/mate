@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type (
@@ -18,6 +19,7 @@ type (
 	LogLevel  = slog.Level
 	Path      = string
 	RenderDPI = int
+	Seconds   = time.Duration
 )
 
 func ToStringFromString(value string) (string, error) {
@@ -30,6 +32,17 @@ func ToBoolFromString(value string) (Bool, error) {
 		return false, fmt.Errorf("invalid boolean %q", value)
 	}
 	return parsed, nil
+}
+
+func ToSecondsFromString(value string) (Seconds, error) {
+	seconds, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	if seconds < 0 {
+		return 0, fmt.Errorf("must not be negative, got %d", seconds)
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func ToRenderDPIFromString(value string) (RenderDPI, error) {
@@ -75,6 +88,7 @@ var (
 	toLogLevel  = ToLogLevelFromString
 	toPath      = ToPathFromString
 	toRenderDPI = ToRenderDPIFromString
+	toSeconds   = ToSecondsFromString
 	toString    = ToStringFromString
 )
 
@@ -83,5 +97,6 @@ var (
 	notDefinedLogLevel  = func() LogLevel { return slog.LevelInfo }
 	notDefinedPath      = func() Path { return "" }
 	notDefinedRenderDPI = func() RenderDPI { return 0 }
+	notDefinedSeconds   = func() Seconds { return 0 }
 	notDefinedstring    = func() string { return "" }
 )

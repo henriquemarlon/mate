@@ -143,7 +143,16 @@ func (c *codexImpl) Execute(ctx context.Context, request Request) ([]byte, error
 
 	input := []inputItem{{Type: "text", Text: request.Prompt}}
 	if len(request.ImageData) > 0 {
-		imagePath := filepath.Join(dir, "page"+imageExtension(request.MediaType))
+		extension := ".png"
+		switch strings.ToLower(strings.TrimSpace(request.MediaType)) {
+		case "image/jpeg", "image/jpg":
+			extension = ".jpg"
+		case "image/webp":
+			extension = ".webp"
+		case "image/gif":
+			extension = ".gif"
+		}
+		imagePath := filepath.Join(dir, "page"+extension)
 		if err := os.WriteFile(imagePath, request.ImageData, 0o600); err != nil {
 			return nil, fmt.Errorf("codex: write image: %w", err)
 		}
@@ -231,7 +240,18 @@ func (c *codexImpl) waitForTurn(ctx context.Context, threadID, turnID string) ([
 					continue
 				}
 				if params.Turn.Status != "completed" {
-					return nil, turnCompletionError(params)
+					// Map the status onto the package sentinels so callers
+					// can route failures without parsing messages.
+					message := params.Turn.Status
+					if params.Turn.Error != nil && params.Turn.Error.Message != "" {
+						message = params.Turn.Error.Message
+					}
+					sentinel := ErrTurnFailed
+					switch params.Turn.Status {
+					case "interrupted", "canceled", "cancelled":
+						sentinel = ErrTurnInterrupted
+					}
+					return nil, fmt.Errorf("%w: %s: %s", sentinel, params.Turn.Status, message)
 				}
 				if strings.TrimSpace(finalMessage) == "" {
 					return nil, ErrNoAgentMessage
@@ -255,21 +275,6 @@ func (c *codexImpl) inactivityWindow() time.Duration {
 	return c.inactivityTimeout
 }
 
-// turnCompletionError maps a non-completed turn status onto the package
-// sentinels so callers can route failures without parsing messages.
-func turnCompletionError(params turnCompletedParams) error {
-	message := params.Turn.Status
-	if params.Turn.Error != nil && params.Turn.Error.Message != "" {
-		message = params.Turn.Error.Message
-	}
-	sentinel := ErrTurnFailed
-	switch params.Turn.Status {
-	case "interrupted", "canceled", "cancelled":
-		sentinel = ErrTurnInterrupted
-	}
-	return fmt.Errorf("%w: %s: %s", sentinel, params.Turn.Status, message)
-}
-
 func (c *codexImpl) interrupt(threadID, turnID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), interruptTimeout)
 	defer cancel()
@@ -281,19 +286,6 @@ func (c *codexImpl) Close() error {
 		c.closeErr = c.backend.Close()
 	})
 	return c.closeErr
-}
-
-func imageExtension(mediaType string) string {
-	switch strings.ToLower(strings.TrimSpace(mediaType)) {
-	case "image/jpeg", "image/jpg":
-		return ".jpg"
-	case "image/webp":
-		return ".webp"
-	case "image/gif":
-		return ".gif"
-	default:
-		return ".png"
-	}
 }
 
 func truncate(value string, limit int) string {

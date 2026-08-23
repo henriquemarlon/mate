@@ -10,6 +10,23 @@ import (
 	"github.com/henriquemarlon/mate/pkg/codex"
 )
 
+type TranscribeInputDTO struct {
+	ImageData []byte
+}
+
+type Uncertainty struct {
+	Label string `json:"label"`
+	Text  string `json:"text"`
+	BBox  []int  `json:"bbox"`
+}
+
+type TranscribeOutputDTO struct {
+	Kind          string        `json:"kind"`
+	Markdown      string        `json:"markdown"`
+	NeedsReview   bool          `json:"needs_review"`
+	Uncertainties []Uncertainty `json:"uncertainties"`
+}
+
 type Transcriber struct {
 	client codex.Codex
 }
@@ -18,24 +35,24 @@ func New(client codex.Codex) *Transcriber {
 	return &Transcriber{client: client}
 }
 
-func (t *Transcriber) Transcribe(ctx context.Context, imageData []byte) (TranscribeOutput, error) {
+func (t *Transcriber) Transcribe(ctx context.Context, input TranscribeInputDTO) (TranscribeOutputDTO, error) {
 	result, err := t.client.Execute(ctx, codex.Request{
 		Prompt:    transcriptionPrompt,
-		ImageData: imageData,
+		ImageData: input.ImageData,
 		MediaType: "image/png",
 		Schema:    assets.TranscriptionSchemaJSON,
 	})
 	if err != nil {
-		return TranscribeOutput{}, fmt.Errorf("transcription: transcribe: %w", err)
+		return TranscribeOutputDTO{}, fmt.Errorf("transcription: transcribe: %w", err)
 	}
-	var response TranscribeOutput
-	if err := json.Unmarshal(result, &response); err != nil {
-		return TranscribeOutput{}, fmt.Errorf("transcription: parse response: %w", err)
+	var output TranscribeOutputDTO
+	if err := json.Unmarshal(result, &output); err != nil {
+		return TranscribeOutputDTO{}, fmt.Errorf("transcription: parse response: %w", err)
 	}
-	if response.Kind == "content" && strings.TrimSpace(response.Markdown) == "" {
-		return TranscribeOutput{}, fmt.Errorf("transcription: content page has empty transcription")
+	if output.Kind == "content" && strings.TrimSpace(output.Markdown) == "" {
+		return TranscribeOutputDTO{}, fmt.Errorf("transcription: content page has empty transcription")
 	}
-	return response, nil
+	return output, nil
 }
 
 const transcriptionPrompt = `Classify and faithfully transcribe this handwritten GoodNotes page.

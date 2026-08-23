@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,28 +54,16 @@ func renderPDF(ctx context.Context, pdfPath string, dpi int) (dir string, pages 
 			continue
 		}
 		path := filepath.Join(dir, name)
-		hash, err := hashFile(path)
+		content, err := os.ReadFile(path)
 		if err != nil {
 			return "", nil, fmt.Errorf("workflow: hash rendered page %d: %w", number, err)
 		}
-		pages = append(pages, renderedPage{Number: number, Path: path, Hash: hash})
+		digest := sha256.Sum256(content)
+		pages = append(pages, renderedPage{Number: number, Path: path, Hash: hex.EncodeToString(digest[:])})
 	}
 	if len(pages) == 0 {
 		return "", nil, fmt.Errorf("workflow: no pages rendered from %s", pdfPath)
 	}
 	sort.Slice(pages, func(i, j int) bool { return pages[i].Number < pages[j].Number })
 	return dir, pages, nil
-}
-
-func hashFile(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	digest := sha256.New()
-	if _, err := io.Copy(digest, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(digest.Sum(nil)), nil
 }

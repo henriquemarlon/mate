@@ -222,15 +222,6 @@ func TestExecuteStallsOnInactivity(t *testing.T) {
 	}
 }
 
-func TestImageExtension(t *testing.T) {
-	if got := imageExtension("image/jpeg"); got != ".jpg" {
-		t.Fatalf("jpeg extension = %q", got)
-	}
-	if got := imageExtension("image/png"); got != ".png" {
-		t.Fatalf("png extension = %q", got)
-	}
-}
-
 // fakeBackend is an in-memory Backend used to exercise lifecycle and
 // protocol handling without spawning a subprocess.
 type fakeBackend struct {

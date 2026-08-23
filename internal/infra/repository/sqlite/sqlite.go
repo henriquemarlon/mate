@@ -18,13 +18,13 @@ import (
 )
 
 type SQLiteRepository struct {
-	DB *gorm.DB
+	Db *gorm.DB
 }
 
 var _ repository.Repository = (*SQLiteRepository)(nil)
 
 func (r *SQLiteRepository) Close() error {
-	sqlDB, err := r.DB.DB()
+	sqlDB, err := r.Db.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get database instance: %w", err)
 	}
@@ -73,7 +73,7 @@ func NewSQLiteRepository(ctx context.Context, conn string) (*SQLiteRepository, e
 		return nil, fmt.Errorf("failed to ping SQLite: %w", err)
 	}
 
-	if err := db.AutoMigrate(&entity.Page{}, &entity.Material{}); err != nil {
+	if err := db.AutoMigrate(&entity.Page{}); err != nil {
 		return nil, fmt.Errorf("failed to auto-migrate tables: %w", err)
 	}
 
@@ -83,5 +83,5 @@ func NewSQLiteRepository(ctx context.Context, conn string) (*SQLiteRepository, e
 		}
 	}
 
-	return &SQLiteRepository{DB: db}, nil
+	return &SQLiteRepository{Db: db}, nil
 }

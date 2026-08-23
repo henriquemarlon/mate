@@ -37,6 +37,12 @@ default = "codex"
 description = "Official Codex CLI executable name or path"
 used-by = ["mate"]
 
+[polling.MATE_POLL_INTERVAL_SECONDS]
+go-type = "Seconds"
+default = "900"
+description = "Interval in seconds between study directory scans"
+used-by = ["mate"]
+
 [render.MATE_DPI]
 go-type = "RenderDPI"
 default = "250"

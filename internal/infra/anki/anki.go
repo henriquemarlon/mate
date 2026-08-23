@@ -1,345 +1,217 @@
 package anki
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
-	"time"
-)
 
-const apiVersion = 6
+	"github.com/henriquemarlon/mate/internal/domain/entity"
+	"github.com/henriquemarlon/mate/pkg/ankiconnect"
+)
 
 const (
-	basicModel    = "Mate Basic"
-	reversedModel = "Mate Reversed"
-	clozeModel    = "Mate Cloze"
+	basicNoteType    = "Mate Basic"
+	reversedNoteType = "Mate Reversed"
+	clozeNoteType    = "Mate Cloze"
 )
 
-type Card struct {
-	Type  string
-	Front string
-	Back  string
-	Tags  []string
+// clozePattern matches the minimal cloze deletion syntax Anki requires,
+// {{c<number>::, so malformed cloze cards fail here with a clear error
+// instead of failing opaquely at addNote.
+var clozePattern = regexp.MustCompile(`\{\{c\d+::`)
+
+type SyncInputDTO struct {
+	NoteID string
+	Cards  []entity.Card
 }
 
-type Summary struct {
+type SyncOutputDTO struct {
 	Created int
 	Updated int
 }
 
 type Client struct {
-	endpoint string
-	deck     string
-	http     *http.Client
-}
-
-type request struct {
-	Action  string `json:"action"`
-	Version int    `json:"version"`
-	Params  any    `json:"params,omitempty"`
-}
-
-type response struct {
-	Result json.RawMessage `json:"result"`
-	Error  *string         `json:"error"`
-}
-
-type modelDefinition struct {
-	Name      string
-	Fields    []string
-	Templates []cardTemplate
-	Cloze     bool
-}
-
-type cardTemplate struct {
-	Name  string `json:"Name"`
-	Front string `json:"Front"`
-	Back  string `json:"Back"`
-}
-
-type note struct {
-	DeckName  string            `json:"deckName"`
-	ModelName string            `json:"modelName"`
-	Fields    map[string]string `json:"fields"`
-	Tags      []string          `json:"tags"`
-	Options   noteOptions       `json:"options"`
-}
-
-type noteOptions struct {
-	AllowDuplicate bool `json:"allowDuplicate"`
-}
-
-type noteUpdate struct {
-	ID     int64             `json:"id"`
-	Fields map[string]string `json:"fields"`
+	conn *ankiconnect.Client
+	deck string
 }
 
 func New(endpoint, deck string) (*Client, error) {
-	parsed, err := url.ParseRequestURI(strings.TrimSpace(endpoint))
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return nil, fmt.Errorf("anki: invalid endpoint %q", endpoint)
-	}
 	if strings.TrimSpace(deck) == "" {
 		return nil, errors.New("anki: deck cannot be empty")
 	}
+	conn, err := ankiconnect.New(endpoint)
+	if err != nil {
+		return nil, err
+	}
 	return &Client{
-		endpoint: parsed.String(),
-		deck:     strings.TrimSpace(deck),
-		http:     &http.Client{Timeout: 10 * time.Second},
+		conn: conn,
+		deck: strings.TrimSpace(deck),
 	}, nil
 }
 
-func (c *Client) Sync(ctx context.Context, noteID string, cards []Card) (Summary, error) {
-	var summary Summary
-	prepared := make([]note, 0, len(cards))
-	for _, card := range cards {
-		item, err := prepareNote(c.deckName(noteID), noteID, card)
-		if err != nil {
-			return summary, err
-		}
-		prepared = append(prepared, item)
-	}
+func (c *Client) Sync(ctx context.Context, input SyncInputDTO) (SyncOutputDTO, error) {
+	var output SyncOutputDTO
 
-	var version int
-	if err := c.invoke(ctx, "version", nil, &version); err != nil {
-		return summary, err
-	}
-	if version < apiVersion {
-		return summary, fmt.Errorf("anki: AnkiConnect API version %d is unsupported; version %d or newer is required", version, apiVersion)
-	}
-	if err := c.ensureDeck(ctx, c.deckName(noteID)); err != nil {
-		return summary, err
-	}
-	if err := c.ensureModels(ctx); err != nil {
-		return summary, err
-	}
-
-	for _, item := range prepared {
-		mateID := item.Fields["MateID"]
-		var noteIDs []int64
-		if err := c.invoke(ctx, "findNotes", struct {
-			Query string `json:"query"`
-		}{Query: "MateID:" + mateID}, &noteIDs); err != nil {
-			return summary, err
-		}
-		switch len(noteIDs) {
-		case 0:
-			var createdID int64
-			if err := c.invoke(ctx, "addNote", struct {
-				Note note `json:"note"`
-			}{Note: item}, &createdID); err != nil {
-				return summary, err
-			}
-			summary.Created++
-		case 1:
-			if err := c.invoke(ctx, "updateNoteFields", struct {
-				Note noteUpdate `json:"note"`
-			}{Note: noteUpdate{ID: noteIDs[0], Fields: item.Fields}}, nil); err != nil {
-				return summary, err
-			}
-			if err := c.invoke(ctx, "updateNoteTags", struct {
-				Note int64    `json:"note"`
-				Tags []string `json:"tags"`
-			}{Note: noteIDs[0], Tags: item.Tags}, nil); err != nil {
-				return summary, err
-			}
-			summary.Updated++
-		default:
-			return summary, fmt.Errorf("anki: MateID %q matched %d notes", mateID, len(noteIDs))
-		}
-	}
-	return summary, nil
-}
-
-func (c *Client) ensureDeck(ctx context.Context, deck string) error {
-	var deckID int64
-	if err := c.invoke(ctx, "createDeck", struct {
-		Deck string `json:"deck"`
-	}{Deck: deck}, &deckID); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Client) ensureModels(ctx context.Context) error {
-	var names []string
-	if err := c.invoke(ctx, "modelNames", nil, &names); err != nil {
-		return err
-	}
-	for _, definition := range modelDefinitions() {
-		if !slices.Contains(names, definition.Name) {
-			if err := c.invoke(ctx, "createModel", struct {
-				ModelName     string         `json:"modelName"`
-				InOrderFields []string       `json:"inOrderFields"`
-				CardTemplates []cardTemplate `json:"cardTemplates"`
-				IsCloze       bool           `json:"isCloze"`
-			}{
-				ModelName:     definition.Name,
-				InOrderFields: definition.Fields,
-				CardTemplates: definition.Templates,
-				IsCloze:       definition.Cloze,
-			}, nil); err != nil {
-				return err
-			}
-			continue
-		}
-		var fields []string
-		if err := c.invoke(ctx, "modelFieldNames", struct {
-			ModelName string `json:"modelName"`
-		}{ModelName: definition.Name}, &fields); err != nil {
-			return err
-		}
-		if !slices.Equal(fields, definition.Fields) {
-			return fmt.Errorf("anki: model %q has fields %v; expected %v", definition.Name, fields, definition.Fields)
-		}
-	}
-	return nil
-}
-
-func (c *Client) invoke(ctx context.Context, action string, params, result any) error {
-	payload, err := json.Marshal(request{Action: action, Version: apiVersion, Params: params})
-	if err != nil {
-		return fmt.Errorf("anki: encode %s request: %w", action, err)
-	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("anki: create %s request: %w", action, err)
-	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-	httpResponse, err := c.http.Do(httpRequest)
-	if err != nil {
-		return fmt.Errorf("anki: call %s at %s: %w", action, c.endpoint, err)
-	}
-	defer httpResponse.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(httpResponse.Body, 4<<20))
-	if err != nil {
-		return fmt.Errorf("anki: read %s response: %w", action, err)
-	}
-	if httpResponse.StatusCode != http.StatusOK {
-		return fmt.Errorf("anki: %s returned HTTP %d: %s", action, httpResponse.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var reply response
-	if err := json.Unmarshal(body, &reply); err != nil {
-		return fmt.Errorf("anki: decode %s response: %w", action, err)
-	}
-	if reply.Error != nil {
-		return fmt.Errorf("anki: %s: %s", action, *reply.Error)
-	}
-	if result == nil || string(reply.Result) == "null" {
-		return nil
-	}
-	if err := json.Unmarshal(reply.Result, result); err != nil {
-		return fmt.Errorf("anki: decode %s result: %w", action, err)
-	}
-	return nil
-}
-
-func prepareNote(deck, noteID string, card Card) (note, error) {
-	card.Type = strings.ToLower(strings.TrimSpace(card.Type))
-	card.Front = strings.TrimSpace(card.Front)
-	card.Back = strings.TrimSpace(card.Back)
-	if card.Front == "" || card.Back == "" {
-		return note{}, errors.New("anki: card front and back cannot be empty")
-	}
-	mateID := cardID(noteID, card.Type, card.Front)
-	item := note{
-		DeckName: deck,
-		Tags:     normalizeTags(append(card.Tags, "mate", "mate_note_"+shortHash(noteID))),
-		Options:  noteOptions{AllowDuplicate: true},
-	}
-	switch card.Type {
-	case "basic":
-		item.ModelName = basicModel
-		item.Fields = map[string]string{"MateID": mateID, "Front": card.Front, "Back": card.Back}
-	case "reversed":
-		item.ModelName = reversedModel
-		item.Fields = map[string]string{"MateID": mateID, "Front": card.Front, "Back": card.Back}
-	case "cloze":
-		if !strings.Contains(card.Front, "{{c") {
-			return note{}, fmt.Errorf("anki: cloze card does not contain a cloze deletion: %q", card.Front)
-		}
-		item.ModelName = clozeModel
-		item.Fields = map[string]string{"MateID": mateID, "Text": card.Front, "Extra": card.Back}
-	default:
-		return note{}, fmt.Errorf("anki: unsupported card type %q", card.Type)
-	}
-	return item, nil
-}
-
-func (c *Client) deckName(noteID string) string {
-	relative := strings.TrimSuffix(filepath.ToSlash(noteID), filepath.Ext(noteID))
+	// Each PDF maps to a child deck below the configured root, mirroring its
+	// relative path. "::" is the Anki deck separator, so path segments that
+	// contain it are defused.
+	relative := strings.TrimSuffix(filepath.ToSlash(input.NoteID), filepath.Ext(input.NoteID))
 	parts := strings.FieldsFunc(relative, func(char rune) bool { return char == '/' || char == '\\' })
 	for index := range parts {
 		parts[index] = strings.TrimSpace(strings.ReplaceAll(parts[index], "::", "-"))
 	}
-	if len(parts) == 0 {
-		return c.deck
+	deck := c.deck
+	if len(parts) > 0 {
+		deck = c.deck + "::" + strings.Join(parts, "::")
 	}
-	return c.deck + "::" + strings.Join(parts, "::")
-}
 
-func cardID(noteID, cardType, front string) string {
-	hash := sha256.Sum256([]byte(noteID + "\x00" + cardType + "\x00" + front))
-	return "mate-" + hex.EncodeToString(hash[:])
-}
-
-func shortHash(value string) string {
-	hash := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(hash[:6])
-}
-
-func normalizeTags(tags []string) []string {
-	seen := make(map[string]struct{}, len(tags))
-	result := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		tag = strings.Join(strings.Fields(strings.TrimSpace(tag)), "_")
-		if tag == "" {
-			continue
+	prepared := make([]ankiconnect.Note, 0, len(input.Cards))
+	for _, card := range input.Cards {
+		card.Type = entity.CardType(strings.ToLower(strings.TrimSpace(string(card.Type))))
+		card.Front = strings.TrimSpace(card.Front)
+		card.Back = strings.TrimSpace(card.Back)
+		if card.Front == "" || card.Back == "" {
+			return output, errors.New("anki: card front and back cannot be empty")
 		}
-		if _, exists := seen[tag]; exists {
-			continue
+
+		// The MateID field is the stable identity that lets Sync update an
+		// existing note instead of duplicating it. \x00 separates the parts
+		// so distinct inputs can never concatenate into the same digest.
+		identity := sha256.Sum256([]byte(input.NoteID + "\x00" + string(card.Type) + "\x00" + card.Front))
+		mateID := "mate-" + hex.EncodeToString(identity[:])
+
+		// Anki splits tags on whitespace, so inner spaces become underscores.
+		// The short note hash tags every card with its source PDF.
+		noteHash := sha256.Sum256([]byte(input.NoteID))
+		tags := append(card.Tags, "mate", "mate_note_"+hex.EncodeToString(noteHash[:6]))
+		seen := make(map[string]struct{}, len(tags))
+		normalized := make([]string, 0, len(tags))
+		for _, tag := range tags {
+			tag = strings.Join(strings.Fields(strings.TrimSpace(tag)), "_")
+			if tag == "" {
+				continue
+			}
+			if _, exists := seen[tag]; exists {
+				continue
+			}
+			seen[tag] = struct{}{}
+			normalized = append(normalized, tag)
 		}
-		seen[tag] = struct{}{}
-		result = append(result, tag)
+		slices.Sort(normalized)
+
+		item := ankiconnect.Note{
+			DeckName: deck,
+			Tags:     normalized,
+			Options:  ankiconnect.NoteOptions{AllowDuplicate: true},
+		}
+		switch card.Type {
+		case entity.CardTypeBasic:
+			item.ModelName = basicNoteType
+			item.Fields = map[string]string{"MateID": mateID, "Front": card.Front, "Back": card.Back}
+		case entity.CardTypeReversed:
+			item.ModelName = reversedNoteType
+			item.Fields = map[string]string{"MateID": mateID, "Front": card.Front, "Back": card.Back}
+		case entity.CardTypeCloze:
+			if !clozePattern.MatchString(card.Front) {
+				return output, fmt.Errorf("anki: cloze card does not contain a cloze deletion: %q", card.Front)
+			}
+			item.ModelName = clozeNoteType
+			item.Fields = map[string]string{"MateID": mateID, "Text": card.Front, "Extra": card.Back}
+		default:
+			return output, fmt.Errorf("anki: unsupported card type %q", card.Type)
+		}
+		prepared = append(prepared, item)
 	}
-	slices.Sort(result)
-	return result
-}
 
-func modelDefinitions() []modelDefinition {
-	return []modelDefinition{
+	version, err := c.conn.Version(ctx)
+	if err != nil {
+		return output, err
+	}
+	if version < ankiconnect.APIVersion {
+		return output, fmt.Errorf("anki: AnkiConnect API version %d is unsupported; version %d or newer is required", version, ankiconnect.APIVersion)
+	}
+
+	if _, err := c.conn.CreateDeck(ctx, deck); err != nil {
+		return output, err
+	}
+
+	// Mate owns its note types: they carry the MateID field, keep their
+	// names stable across localized Anki installs, and are validated so a
+	// hand-edited note type fails loudly instead of corrupting future syncs.
+	names, err := c.conn.NoteTypeNames(ctx)
+	if err != nil {
+		return output, err
+	}
+	noteTypes := []ankiconnect.NoteType{
 		{
-			Name:   basicModel,
+			Name:   basicNoteType,
 			Fields: []string{"Front", "Back", "MateID"},
-			Templates: []cardTemplate{{
+			Templates: []ankiconnect.CardTemplate{{
 				Name: "Forward", Front: "{{Front}}", Back: "{{FrontSide}}<hr id=answer>{{Back}}",
 			}},
 		},
 		{
-			Name:   reversedModel,
+			Name:   reversedNoteType,
 			Fields: []string{"Front", "Back", "MateID"},
-			Templates: []cardTemplate{
+			Templates: []ankiconnect.CardTemplate{
 				{Name: "Forward", Front: "{{Front}}", Back: "{{FrontSide}}<hr id=answer>{{Back}}"},
 				{Name: "Reverse", Front: "{{Back}}", Back: "{{FrontSide}}<hr id=answer>{{Front}}"},
 			},
 		},
 		{
-			Name:   clozeModel,
+			Name:   clozeNoteType,
 			Fields: []string{"Text", "Extra", "MateID"},
-			Templates: []cardTemplate{{
+			Templates: []ankiconnect.CardTemplate{{
 				Name: "Cloze", Front: "{{cloze:Text}}", Back: "{{cloze:Text}}<hr id=answer>{{Extra}}",
 			}},
 			Cloze: true,
 		},
 	}
+	for _, noteType := range noteTypes {
+		if !slices.Contains(names, noteType.Name) {
+			if err := c.conn.CreateNoteType(ctx, noteType); err != nil {
+				return output, err
+			}
+			continue
+		}
+		fields, err := c.conn.NoteTypeFieldNames(ctx, noteType.Name)
+		if err != nil {
+			return output, err
+		}
+		if !slices.Equal(fields, noteType.Fields) {
+			return output, fmt.Errorf("anki: note type %q has fields %v; expected %v", noteType.Name, fields, noteType.Fields)
+		}
+	}
+
+	for _, item := range prepared {
+		mateID := item.Fields["MateID"]
+		noteIDs, err := c.conn.FindNotes(ctx, "MateID:"+mateID)
+		if err != nil {
+			return output, err
+		}
+		switch len(noteIDs) {
+		case 0:
+			if _, err := c.conn.AddNote(ctx, item); err != nil {
+				return output, err
+			}
+			output.Created++
+		case 1:
+			if err := c.conn.UpdateNoteFields(ctx, noteIDs[0], item.Fields); err != nil {
+				return output, err
+			}
+			if err := c.conn.UpdateNoteTags(ctx, noteIDs[0], item.Tags); err != nil {
+				return output, err
+			}
+			output.Updated++
+		default:
+			return output, fmt.Errorf("anki: MateID %q matched %d notes", mateID, len(noteIDs))
+		}
+	}
+	return output, nil
 }

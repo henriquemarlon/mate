@@ -32,7 +32,7 @@ func writeTranscript(root, noteID string, pages []entity.Page) error {
 	return writeAtomic(filepath.Join(dir, "transcript.md"), []byte(content.String()))
 }
 
-func writeMaterial(root, noteID string, material paradigm.GenerateOutput) error {
+func writeMaterial(root, noteID string, material paradigm.GenerateOutputDTO) error {
 	dir, err := noteDirectory(root, noteID)
 	if err != nil {
 		return err

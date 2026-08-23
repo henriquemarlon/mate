@@ -71,9 +71,12 @@ func NewAppServerBackend(ctx context.Context, binary string, logger *slog.Logger
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	resolved, err := resolveBinary(binary)
+	if strings.TrimSpace(binary) == "" {
+		binary = "codex"
+	}
+	resolved, err := exec.LookPath(binary)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("codex: binary %q not found in PATH: %w", binary, err)
 	}
 
 	command := exec.Command(resolved, "app-server", "--stdio")
@@ -286,17 +289,6 @@ func (b *appServerBackend) setWaitError(err error) {
 		b.waitErr = err
 	}
 	b.waitMu.Unlock()
-}
-
-func resolveBinary(binary string) (string, error) {
-	if strings.TrimSpace(binary) == "" {
-		binary = "codex"
-	}
-	path, err := exec.LookPath(binary)
-	if err != nil {
-		return "", fmt.Errorf("codex: binary %q not found in PATH: %w", binary, err)
-	}
-	return path, nil
 }
 
 type lockedBuffer struct {

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/internal/domain/entity"
-	"github.com/henriquemarlon/mate/internal/infra/anki"
 	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
 )
 
@@ -20,10 +19,10 @@ type sourcePage struct {
 	Markdown      string `json:"markdown"`
 }
 
-func (s *Service) material(ctx context.Context, noteID string, pages, pending []entity.Page) (paradigm.GenerateOutput, *entity.Material, bool, error) {
+func (s *Service) material(ctx context.Context, noteID string, pages, pending []entity.Page) (paradigm.GenerateOutputDTO, *entity.Material, bool, error) {
 	source, sourceHash, err := materialSource(pages)
 	if err != nil {
-		return paradigm.GenerateOutput{}, nil, false, err
+		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
 
 	stored, err := s.repo.FindMaterial(noteID)
@@ -32,24 +31,29 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 		return material, &stored, false, err
 	}
 	if err != nil && !errors.Is(err, entity.ErrMaterialNotFound) {
-		return paradigm.GenerateOutput{}, nil, false, err
+		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
 
-	var previous paradigm.GenerateOutput
+	var previous paradigm.GenerateOutputDTO
 	if err == nil {
 		previous, err = decodeMaterial(stored)
 		if err != nil {
-			return paradigm.GenerateOutput{}, nil, false, err
+			return paradigm.GenerateOutputDTO{}, nil, false, err
 		}
-		source = transcribedSource(pending)
+		source = source[:0]
+		for _, page := range pending {
+			if strings.TrimSpace(page.Transcription) != "" {
+				source = append(source, paradigm.SourcePage{Number: page.PageNumber, Markdown: page.Transcription})
+			}
+		}
 		if len(source) == 0 {
-			return paradigm.GenerateOutput{}, nil, false, errors.New("workflow: material source changed without transcribed pages")
+			return paradigm.GenerateOutputDTO{}, nil, false, errors.New("workflow: material source changed without transcribed pages")
 		}
 	}
 
-	generated, err := s.paradigm.Generate(ctx, paradigm.GenerateInput{NoteID: noteID, Pages: source})
+	generated, err := s.paradigm.Generate(ctx, paradigm.GenerateInputDTO{NoteID: noteID, Pages: source})
 	if err != nil {
-		return paradigm.GenerateOutput{}, nil, false, err
+		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
 	for index := range generated.Cards {
 		generated.Cards[index].Tags = append(generated.Cards[index].Tags, "mate")
@@ -57,35 +61,25 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 	material := mergeMaterial(previous, generated)
 	cardsJSON, err := json.Marshal(material.Cards)
 	if err != nil {
-		return paradigm.GenerateOutput{}, nil, false, fmt.Errorf("workflow: encode material cards: %w", err)
+		return paradigm.GenerateOutputDTO{}, nil, false, fmt.Errorf("workflow: encode material cards: %w", err)
 	}
 	created, err := entity.NewMaterial(noteID, sourceHash, material.Feynman, string(cardsJSON))
 	if err != nil {
-		return paradigm.GenerateOutput{}, nil, false, err
+		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
 	if err := s.repo.SaveMaterial(created); err != nil {
-		return paradigm.GenerateOutput{}, nil, false, err
+		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
 	return material, created, true, nil
 }
 
-func transcribedSource(pages []entity.Page) []paradigm.SourcePage {
-	result := make([]paradigm.SourcePage, 0, len(pages))
-	for _, page := range pages {
-		if strings.TrimSpace(page.Transcription) != "" {
-			result = append(result, paradigm.SourcePage{Number: page.PageNumber, Markdown: page.Transcription})
-		}
-	}
-	return result
-}
-
-func mergeMaterial(previous, generated paradigm.GenerateOutput) paradigm.GenerateOutput {
+func mergeMaterial(previous, generated paradigm.GenerateOutputDTO) paradigm.GenerateOutputDTO {
 	if strings.TrimSpace(previous.Feynman) == "" {
 		return generated
 	}
-	result := paradigm.GenerateOutput{
+	result := paradigm.GenerateOutputDTO{
 		Feynman: strings.TrimSpace(previous.Feynman) + "\n\n---\n\n" + strings.TrimSpace(generated.Feynman),
-		Cards:   append([]paradigm.Card(nil), previous.Cards...),
+		Cards:   append([]entity.Card(nil), previous.Cards...),
 	}
 	existing := make(map[string]struct{}, len(result.Cards))
 	for _, card := range result.Cards {
@@ -101,8 +95,8 @@ func mergeMaterial(previous, generated paradigm.GenerateOutput) paradigm.Generat
 	return result
 }
 
-func cardKey(card paradigm.Card) string {
-	return strings.ToLower(strings.TrimSpace(card.Type)) + "\x00" + strings.Join(strings.Fields(card.Front), " ")
+func cardKey(card entity.Card) string {
+	return strings.ToLower(strings.TrimSpace(string(card.Type))) + "\x00" + strings.Join(strings.Fields(card.Front), " ")
 }
 
 func materialSource(pages []entity.Page) ([]paradigm.SourcePage, string, error) {
@@ -132,23 +126,10 @@ func materialSource(pages []entity.Page) ([]paradigm.SourcePage, string, error) 
 	return input, hex.EncodeToString(hash[:]), nil
 }
 
-func decodeMaterial(stored entity.Material) (paradigm.GenerateOutput, error) {
-	material := paradigm.GenerateOutput{Feynman: stored.Feynman}
+func decodeMaterial(stored entity.Material) (paradigm.GenerateOutputDTO, error) {
+	material := paradigm.GenerateOutputDTO{Feynman: stored.Feynman}
 	if err := json.Unmarshal([]byte(stored.CardsJSON), &material.Cards); err != nil {
-		return paradigm.GenerateOutput{}, fmt.Errorf("workflow: decode stored material cards: %w", err)
+		return paradigm.GenerateOutputDTO{}, fmt.Errorf("workflow: decode stored material cards: %w", err)
 	}
 	return material, nil
-}
-
-func ankiCards(cards []paradigm.Card) []anki.Card {
-	result := make([]anki.Card, 0, len(cards))
-	for _, card := range cards {
-		result = append(result, anki.Card{
-			Type:  card.Type,
-			Front: card.Front,
-			Back:  card.Back,
-			Tags:  card.Tags,
-		})
-	}
-	return result
 }
