@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -110,14 +109,11 @@ func Create(ctx context.Context, c *CreateInfo) (*Service, error) {
 	return s, nil
 }
 
-// Tick scans the study directory once. A dead app server is terminal for the
-// daemon: every future tick would fail, so it is escalated through
-// service.ErrServiceStopped to abort Serve.
+// Tick scans the study directory once. Every Codex call is its own
+// subprocess, so a failed call is scoped to its page and no error here is
+// terminal for the daemon.
 func (s *Service) Tick(ctx context.Context) (bool, error) {
 	_, err := s.run(ctx)
-	if errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
-		return false, errors.Join(service.ErrServiceStopped, err)
-	}
 	return false, err
 }
 
@@ -135,8 +131,8 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 		result.NeedsReview += noteSummary.NeedsReview
 		if err != nil {
 			// One broken note must not abort the batch: only give up when
-			// the run itself is over (cancellation, dead app server).
-			if ctx.Err() != nil || errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
+			// the run itself was cancelled.
+			if ctx.Err() != nil {
 				return err
 			}
 			s.Logger.Error("note failed; continuing with next note", "note", path, "error", err)
@@ -197,7 +193,7 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		s.Logger.Info("transcribing page", "note", noteID, "page", page.Number)
 		transcription, err := s.transcriber.Transcribe(ctx, transcriber.TranscribeInputDTO{ImageData: pagePNG})
 		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
+			if ctx.Err() != nil {
 				return result, err
 			}
 			// A failed turn is page-scoped: send the page to review and
@@ -254,7 +250,7 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 	}
 	material, stored, generated, err := s.material(ctx, noteID, processed, pendingGeneration)
 	if err != nil {
-		if ctx.Err() != nil || errors.Is(err, codex.ErrClosed) || errors.Is(err, codex.ErrStopped) {
+		if ctx.Err() != nil {
 			return result, err
 		}
 		// Pages stay transcribed, so the next run retries generation or sync.

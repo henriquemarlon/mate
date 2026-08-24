@@ -71,13 +71,10 @@ func run(cmd *cobra.Command, _ []string) (err error) {
 		err = errors.Join(err, repo.Close())
 	}()
 
-	codexClient, err := codex.New(ctx, codex.Config{Binary: cfg.CodexBin, Logger: logger})
+	codexClient, err := codex.New(codex.Config{Binary: cfg.CodexBin, Logger: logger})
 	if err != nil {
-		return fmt.Errorf("start codex app server (check MATE_CODEX_BIN or --codex-bin): %w", err)
+		return fmt.Errorf("resolve codex binary (check MATE_CODEX_BIN or --codex-bin): %w", err)
 	}
-	defer func() {
-		err = errors.Join(err, codexClient.Close())
-	}()
 
 	ankiClient, err := anki.New(cfg.AnkiEndpoint, cfg.AnkiDeck)
 	if err != nil {
