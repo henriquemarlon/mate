@@ -35,6 +35,7 @@ func init() {
 	Cmd.Flags().Int("dpi", 0, "PDF render DPI (72-600)")
 	Cmd.Flags().Int("poll-interval", 0, "Interval in seconds between study directory scans")
 	Cmd.Flags().String("log-level", "", "Log level: debug, info, warn, or error")
+	Cmd.Flags().Bool("notifications", true, "Send a macOS notification when a page needs review")
 	Cmd.Flags().Bool("log-color", true, "Enable colored log output")
 	cobra.CheckErr(viper.BindPFlag(configs.STUDY_DIR, Cmd.Flags().Lookup("study-dir")))
 	cobra.CheckErr(viper.BindPFlag(configs.OUTPUT_DIR, Cmd.Flags().Lookup("output-dir")))
@@ -44,6 +45,7 @@ func init() {
 	cobra.CheckErr(viper.BindPFlag(configs.ANKI_DECK, Cmd.Flags().Lookup("anki-deck")))
 	cobra.CheckErr(viper.BindPFlag(configs.DPI, Cmd.Flags().Lookup("dpi")))
 	cobra.CheckErr(viper.BindPFlag(configs.POLL_INTERVAL_SECONDS, Cmd.Flags().Lookup("poll-interval")))
+	cobra.CheckErr(viper.BindPFlag(configs.NOTIFICATIONS, Cmd.Flags().Lookup("notifications")))
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_LEVEL, Cmd.Flags().Lookup("log-level")))
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_COLOR, Cmd.Flags().Lookup("log-color")))
 

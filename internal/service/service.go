@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gen2brain/beeep"
+
 	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/domain/entity"
 	"github.com/henriquemarlon/mate/internal/infra/anki"
@@ -141,6 +143,16 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 		}
 		if noteSummary.PagesProcessed > 0 || noteSummary.NeedsReview > 0 {
 			result.NotesProcessed++
+		}
+		if s.config.Notifications && noteSummary.NeedsReview > 0 {
+			// Best-effort desktop notification: the daemon runs unattended,
+			// so this is the only signal that a page is waiting for a human.
+			// Headless hosts have no notification server; failures are debug
+			// noise, never a tick error.
+			message := fmt.Sprintf("%s: %d page(s) need review", filepath.Base(path), noteSummary.NeedsReview)
+			if err := beeep.Notify("Mate", message, ""); err != nil {
+				s.Logger.Debug("review notification failed", "note", path, "error", err)
+			}
 		}
 		return nil
 	})

@@ -60,3 +60,9 @@ go-type = "Bool"
 default = "true"
 description = "Enable colored log output"
 used-by = ["mate"]
+
+[notifications.MATE_NOTIFICATIONS]
+go-type = "Bool"
+default = "true"
+description = "Send a macOS notification when a page needs review"
+used-by = ["mate"]

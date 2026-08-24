@@ -42,6 +42,14 @@ Log level: debug, info, warn, or error
 - Default: `info`
 - Used by: `mate`
 
+## `MATE_NOTIFICATIONS`
+
+Send a macOS notification when a page needs review
+
+- Type: `Bool`
+- Default: `true`
+- Used by: `mate`
+
 ## `MATE_OUTPUT_DIR`
 
 Directory where Mate writes transcripts, study material, and review images

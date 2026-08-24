@@ -21,6 +21,7 @@ const (
 	CODEX_BIN             = "MATE_CODEX_BIN"
 	LOG_COLOR             = "MATE_LOG_COLOR"
 	LOG_LEVEL             = "MATE_LOG_LEVEL"
+	NOTIFICATIONS         = "MATE_NOTIFICATIONS"
 	OUTPUT_DIR            = "MATE_OUTPUT_DIR"
 	STUDY_DIR             = "MATE_STUDY_DIR"
 	POLL_INTERVAL_SECONDS = "MATE_POLL_INTERVAL_SECONDS"
@@ -34,6 +35,7 @@ func SetDefaults() {
 	viper.SetDefault(CODEX_BIN, "codex")
 	viper.SetDefault(LOG_COLOR, "true")
 	viper.SetDefault(LOG_LEVEL, "info")
+	viper.SetDefault(NOTIFICATIONS, "true")
 	viper.SetDefault(OUTPUT_DIR, "~/.mate/output")
 	viper.SetDefault(STUDY_DIR, "~/GoodNotes")
 	viper.SetDefault(POLL_INTERVAL_SECONDS, "900")
@@ -47,6 +49,7 @@ type MateConfig struct {
 	CodexBin            string
 	LogColor            Bool
 	LogLevel            LogLevel
+	Notifications       Bool
 	OutputDir           Path
 	StudyDir            Path
 	PollIntervalSeconds Seconds
@@ -82,6 +85,11 @@ func LoadMateConfig() (*MateConfig, error) {
 	cfg.LogLevel, err = GetLogLevel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s: %w", LOG_LEVEL, err)
+	}
+
+	cfg.Notifications, err = GetNotifications()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", NOTIFICATIONS, err)
 	}
 
 	cfg.OutputDir, err = GetOutputDir()
@@ -170,6 +178,18 @@ func GetLogLevel() (LogLevel, error) {
 		return parsed, nil
 	}
 	return notDefinedLogLevel(), fmt.Errorf("%s: %w", LOG_LEVEL, ErrNotDefined)
+}
+
+func GetNotifications() (Bool, error) {
+	value := viper.GetString(NOTIFICATIONS)
+	if value != "" {
+		parsed, err := toBool(value)
+		if err != nil {
+			return parsed, fmt.Errorf("failed to parse %s: %w", NOTIFICATIONS, err)
+		}
+		return parsed, nil
+	}
+	return notDefinedBool(), fmt.Errorf("%s: %w", NOTIFICATIONS, ErrNotDefined)
 }
 
 func GetOutputDir() (Path, error) {
