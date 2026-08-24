@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.henriquemarlon.mate</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/henriquemarlon/.local/share/mise/shims/mate</string>
+		<string>run</string>
+		<string>--study-dir=/Users/henriquemarlon/GoodNotes</string>
+		<string>--output-dir=/Users/henriquemarlon/.mate/output</string>
+		<string>--state-db=/Users/henriquemarlon/.mate/state.db</string>
+		<string>--anki-endpoint=http://127.0.0.1:8765</string>
+		<string>--log-color=false</string>
+	</array>
+
+	<!-- launchd starts agents with a minimal PATH. Include mise shims,
+	     the official Codex installer directory and system binaries. -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/Users/henriquemarlon/.local/share/mise/shims:/Users/henriquemarlon/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<key>StandardOutPath</key>
+	<string>/Users/henriquemarlon/.mate/launchd.stdout.log</string>
+
+	<key>StandardErrorPath</key>
+	<string>/Users/henriquemarlon/.mate/launchd.stderr.log</string>
+</dict>
+</plist>
