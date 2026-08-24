@@ -131,7 +131,9 @@ func (c *Client) Execute(ctx context.Context, request Request) ([]byte, error) {
 		}
 		args = append(args, "--image", imagePath)
 	}
-	args = append(args, request.Prompt)
+	// --image accepts multiple values, so terminate option parsing before the
+	// positional prompt or the CLI will interpret the prompt as another image.
+	args = append(args, "--", request.Prompt)
 
 	execCtx, cancel := context.WithTimeout(ctx, c.execTimeout)
 	defer cancel()
