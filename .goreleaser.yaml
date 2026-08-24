@@ -1,0 +1,40 @@
+version: 2
+
+project_name: mate
+
+builds:
+  - id: mate-darwin-arm64
+    main: ./cmd/mate
+    binary: mate
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+    flags:
+      - -trimpath
+    tags:
+      - sqlite_omit_load_extension
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/henriquemarlon/mate/internal/infra/version.BuildVersion={{ .Version }}
+
+archives:
+  - id: mate-darwin-arm64
+    ids:
+      - mate-darwin-arm64
+    formats:
+      - tar.gz
+    name_template: "mate_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - init/launchd/com.henriquemarlon.mate.plist
+      - init/launchd/com.henriquemarlon.anki.plist
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
