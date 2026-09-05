@@ -13,6 +13,14 @@ func generateCode(path string, envs []Env) error {
 	functions := template.FuncMap{
 		"constName": constName,
 		"fieldName": fieldName,
+		"anyFile": func(envs []Env) bool {
+			for _, env := range envs {
+				if env.File {
+					return true
+				}
+			}
+			return false
+		},
 		"parseFunc": func(goType string) string {
 			if goType == "string" {
 				return "toString"
@@ -49,6 +57,10 @@ package configs
 import (
 	"errors"
 	"fmt"
+{{- if anyFile . }}
+	"os"
+	"strings"
+{{- end }}
 
 	"github.com/spf13/viper"
 )
@@ -62,6 +74,9 @@ func init() {
 const (
 {{- range . }}
 	{{ constName .Name }} = {{ quote .Name }}
+{{- if .File }}
+	{{ constName .Name }}_FILE = {{ quote (printf "%s_FILE" .Name) }}
+{{- end }}
 {{- end }}
 )
 
@@ -93,6 +108,17 @@ func LoadMateConfig() (*MateConfig, error) {
 {{ range . }}
 func Get{{ fieldName .Name }}() ({{ .GoType }}, error) {
 	value := viper.GetString({{ constName .Name }})
+{{- if .File }}
+	if value == "" {
+		if filename := viper.GetString({{ constName .Name }}_FILE); filename != "" {
+			contents, err := os.ReadFile(filename)
+			if err != nil {
+				return notDefined{{ .GoType }}(), fmt.Errorf("failed to read %s: %w", {{ constName .Name }}_FILE, err)
+			}
+			value = strings.TrimSpace(string(contents))
+		}
+	}
+{{- end }}
 	if value != "" {
 		parsed, err := {{ parseFunc .GoType }}(value)
 		if err != nil {

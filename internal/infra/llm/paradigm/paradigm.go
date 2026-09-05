@@ -8,7 +8,7 @@ import (
 
 	"github.com/henriquemarlon/mate/assets"
 	"github.com/henriquemarlon/mate/internal/domain/entity"
-	"github.com/henriquemarlon/mate/pkg/codex"
+	"github.com/henriquemarlon/mate/pkg/llm"
 )
 
 type SourcePage struct {
@@ -27,10 +27,10 @@ type GenerateOutputDTO struct {
 }
 
 type Generator struct {
-	client codex.Codex
+	client llm.Model
 }
 
-func New(client codex.Codex) *Generator {
+func New(client llm.Model) *Generator {
 	return &Generator{client: client}
 }
 
@@ -40,9 +40,10 @@ func (g *Generator) Generate(ctx context.Context, input GenerateInputDTO) (Gener
 	for _, page := range input.Pages {
 		fmt.Fprintf(&source, "--- PAGE %d ---\n%s\n\n", page.Number, page.Markdown)
 	}
-	result, err := g.client.Execute(ctx, codex.Request{
-		Prompt: paradigmPrompt + "\n\n" + source.String(),
-		Schema: assets.ParadigmSchemaJSON,
+	result, err := g.client.Execute(ctx, llm.Request{
+		Prompt:     paradigmPrompt + "\n\n" + source.String(),
+		SchemaName: "study_material",
+		Schema:     assets.ParadigmSchemaJSON,
 	})
 	if err != nil {
 		return GenerateOutputDTO{}, fmt.Errorf("paradigm: generate material: %w", err)

@@ -22,8 +22,29 @@ type (
 	Seconds   = time.Duration
 )
 
+// Redacted wraps a value so it never appears in logs. The service logs its
+// complete configuration at startup; secrets must render as [REDACTED].
+type Redacted[T any] struct {
+	Value T
+}
+
+func (r Redacted[T]) String() string {
+	return "[REDACTED]"
+}
+
+// LogValue keeps the value redacted when logged directly through slog.
+func (r Redacted[T]) LogValue() slog.Value {
+	return slog.StringValue(r.String())
+}
+
+type RedactedString = Redacted[string]
+
 func ToStringFromString(value string) (string, error) {
 	return value, nil
+}
+
+func ToRedactedStringFromString(value string) (RedactedString, error) {
+	return RedactedString{Value: value}, nil
 }
 
 func ToBoolFromString(value string) (Bool, error) {
@@ -84,19 +105,21 @@ func ToPathFromString(value string) (Path, error) {
 }
 
 var (
-	toBool      = ToBoolFromString
-	toLogLevel  = ToLogLevelFromString
-	toPath      = ToPathFromString
-	toRenderDPI = ToRenderDPIFromString
-	toSeconds   = ToSecondsFromString
-	toString    = ToStringFromString
+	toBool           = ToBoolFromString
+	toLogLevel       = ToLogLevelFromString
+	toPath           = ToPathFromString
+	toRedactedString = ToRedactedStringFromString
+	toRenderDPI      = ToRenderDPIFromString
+	toSeconds        = ToSecondsFromString
+	toString         = ToStringFromString
 )
 
 var (
-	notDefinedBool      = func() Bool { return true }
-	notDefinedLogLevel  = func() LogLevel { return slog.LevelInfo }
-	notDefinedPath      = func() Path { return "" }
-	notDefinedRenderDPI = func() RenderDPI { return 0 }
-	notDefinedSeconds   = func() Seconds { return 0 }
-	notDefinedstring    = func() string { return "" }
+	notDefinedBool           = func() Bool { return true }
+	notDefinedLogLevel       = func() LogLevel { return slog.LevelInfo }
+	notDefinedPath           = func() Path { return "" }
+	notDefinedRedactedString = func() RedactedString { return RedactedString{} }
+	notDefinedRenderDPI      = func() RenderDPI { return 0 }
+	notDefinedSeconds        = func() Seconds { return 0 }
+	notDefinedstring         = func() string { return "" }
 )

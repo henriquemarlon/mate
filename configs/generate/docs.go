@@ -14,6 +14,9 @@ func generateDocs(path string, envs []Env) error {
 		fmt.Fprintf(&output, "## `%s`\n\n%s\n\n", env.Name, env.Description)
 		fmt.Fprintf(&output, "- Type: `%s`\n", env.GoType)
 		fmt.Fprintf(&output, "- Default: `%s`\n", *env.Default)
+		if env.File {
+			fmt.Fprintf(&output, "- File variant: `%s_FILE` reads the value from the named file (Docker Compose secrets convention); the plain variable takes precedence\n", env.Name)
+		}
 		fmt.Fprintf(&output, "- Used by: `%s`\n\n", strings.Join(env.UsedBy, "`, `"))
 	}
 	if err := os.MkdirAll("../docs", 0o755); err != nil {

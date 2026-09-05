@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/internal/domain/entity"
-	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
+	"github.com/henriquemarlon/mate/internal/infra/llm/paradigm"
 )
 
 func writeTranscript(root, noteID string, pages []entity.Page) error {

@@ -45,7 +45,7 @@ func fieldName(name string) string {
 	words := strings.Split(strings.TrimPrefix(name, "MATE_"), "_")
 	for index, word := range words {
 		switch word {
-		case "DB", "DPI":
+		case "API", "DB", "DPI", "LLM", "URL":
 			words[index] = word
 		default:
 			word = strings.ToLower(word)

@@ -16,12 +16,17 @@
 		<string>--log-color=false</string>
 	</array>
 
-	<!-- launchd starts agents with a minimal PATH. Include mise shims,
-	     the official Codex installer directory and system binaries. -->
+	<!-- launchd starts agents with a minimal PATH and no shell profile.
+	     Include mise shims and system binaries. The model API key is read
+	     from a file (Docker Compose secrets convention) so the secret never
+	     lives inside this plist. Create it with:
+	         printf '%s' "sk-..." > ~/.mate/llm_api_key && chmod 600 ~/.mate/llm_api_key -->
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>PATH</key>
 		<string>/Users/henriquemarlon/.local/share/mise/shims:/Users/henriquemarlon/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<key>MATE_LLM_API_KEY_FILE</key>
+		<string>/Users/henriquemarlon/.mate/llm_api_key</string>
 	</dict>
 
 	<key>RunAtLoad</key>

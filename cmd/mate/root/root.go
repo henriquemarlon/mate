@@ -11,7 +11,7 @@ const serviceName = "mate"
 var Cmd = &cobra.Command{
 	Use:     serviceName,
 	Short:   "Mate - Turn GoodNotes PDFs into study material",
-	Long:    `Mate detects local GoodNotes PDFs, transcribes new handwritten pages with Codex, and writes auditable study artifacts.`,
+	Long:    `Mate detects local GoodNotes PDFs, transcribes new handwritten pages with an LLM, and writes auditable study artifacts.`,
 	Version: version.BuildVersion,
 }
 

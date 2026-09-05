@@ -18,13 +18,7 @@ Turn locally synced GoodNotes manuscripts into auditable study material.
 For a native Apple Silicon macOS installation:
 
 1. [Install mise](https://mise.jdx.dev/getting-started.html) 2026.8.11 or later;
-2. Install the official Codex CLI and authenticate it:
-
-   ```sh
-   curl -fsSL https://chatgpt.com/codex/install.sh | sh
-   codex login
-   ```
-
+2. Create an [OpenAI API key](https://platform.openai.com/api-keys) (or a key for any OpenAI-compatible endpoint). Supply it as `MATE_LLM_API_KEY`, or point `MATE_LLM_API_KEY_FILE` at a file containing it (Docker Compose secrets convention);
 3. Install Poppler globally with mise:
 
    ```sh
@@ -36,6 +30,8 @@ For a native Apple Silicon macOS installation:
 
 4. [Install Anki Desktop](https://apps.ankiweb.net/) and the [AnkiConnect add-on](https://ankiweb.net/shared/info/2055492159);
 5. Sync the GoodNotes or Google Drive PDFs to a local directory.
+
+Mate talks to the model through the [eino](https://github.com/cloudwego/eino) framework. The endpoint and model are configurable with `--llm-base-url`/`MATE_LLM_BASE_URL` and `--llm-model`/`MATE_LLM_MODEL`, so any OpenAI-compatible provider works.
 
 Go 1.25 or later is required only when building Mate from source.
 
@@ -61,6 +57,7 @@ The generated [configuration reference](docs/config.md) contains the available v
 Start Mate with the directories used for synchronized PDFs, generated artifacts, and persistent SQLite state:
 
 ```sh
+export MATE_LLM_API_KEY=sk-...
 mate run \
   --study-dir "$HOME/GoodNotes" \
   --output-dir "$HOME/.mate/output" \
@@ -77,7 +74,12 @@ This setup is available only on macOS. The launchd agents under [`init/launchd`]
 - `com.henriquemarlon.mate.plist` starts Mate at login, resolves Mate and Poppler through the mise shims, and restarts Mate if it exits;
 - `com.henriquemarlon.anki.plist` opens Anki Desktop hidden at login and re-opens it after a manual quit.
 
-The agents require absolute paths. Review the bundled plists and adapt their user-specific paths before installing them:
+The agents require absolute paths. Review the bundled plists and adapt their user-specific paths before installing them. launchd does not inherit the login shell environment, so the Mate agent reads the API key through `MATE_LLM_API_KEY_FILE`; create that file first:
+
+```sh
+printf '%s' "sk-..." > "$HOME/.mate/llm_api_key"
+chmod 600 "$HOME/.mate/llm_api_key"
+```
 
 ```sh
 mkdir -p "$HOME/.mate/output"

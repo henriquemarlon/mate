@@ -14,9 +14,9 @@ import (
 	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/domain/entity"
 	"github.com/henriquemarlon/mate/internal/infra/anki"
-	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
-	"github.com/henriquemarlon/mate/internal/infra/codex/transcriber"
-	"github.com/henriquemarlon/mate/pkg/codex"
+	"github.com/henriquemarlon/mate/internal/infra/llm/paradigm"
+	"github.com/henriquemarlon/mate/internal/infra/llm/transcriber"
+	"github.com/henriquemarlon/mate/pkg/llm"
 	"github.com/henriquemarlon/mate/pkg/service"
 )
 
@@ -58,7 +58,7 @@ type CreateInfo struct {
 	Config     configs.MateConfig
 	Logger     *slog.Logger
 	Repository Repository
-	Codex      codex.Codex
+	LLM        llm.Model
 	Anki       *anki.Client
 }
 
@@ -71,8 +71,8 @@ func Create(ctx context.Context, c *CreateInfo) (*Service, error) {
 	if c.Repository == nil {
 		return nil, fmt.Errorf("repository on mate service Create is nil")
 	}
-	if c.Codex == nil {
-		return nil, fmt.Errorf("codex client on mate service Create is nil")
+	if c.LLM == nil {
+		return nil, fmt.Errorf("llm client on mate service Create is nil")
 	}
 	if c.Anki == nil {
 		return nil, fmt.Errorf("anki client on mate service Create is nil")
@@ -91,8 +91,8 @@ func Create(ctx context.Context, c *CreateInfo) (*Service, error) {
 	s := &Service{
 		config:      c.Config,
 		repo:        c.Repository,
-		transcriber: transcriber.New(c.Codex),
-		paradigm:    paradigm.New(c.Codex),
+		transcriber: transcriber.New(c.LLM),
+		paradigm:    paradigm.New(c.LLM),
 		anki:        c.Anki,
 	}
 	if err := service.InitTickServiceTemplate(&s.TickServiceTemplate, &service.TickServiceConfigs{
@@ -111,8 +111,8 @@ func Create(ctx context.Context, c *CreateInfo) (*Service, error) {
 	return s, nil
 }
 
-// Tick scans the study directory once. Every Codex call is its own
-// subprocess, so a failed call is scoped to its page and no error here is
+// Tick scans the study directory once. Every model call is its own isolated
+// request, so a failed call is scoped to its page and no error here is
 // terminal for the daemon.
 func (s *Service) Tick(ctx context.Context) (bool, error) {
 	_, err := s.run(ctx)
@@ -282,7 +282,7 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 				return result, err
 			}
 			// The material is already persisted. A later one-shot run can retry
-			// Anki without spending another Codex turn.
+			// Anki without spending another model turn.
 			s.Logger.Error("Anki sync failed; will retry next run", "note", noteID, "error", err)
 			return result, nil
 		}

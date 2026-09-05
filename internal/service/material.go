@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/internal/domain/entity"
-	"github.com/henriquemarlon/mate/internal/infra/codex/paradigm"
+	"github.com/henriquemarlon/mate/internal/infra/llm/paradigm"
 )
 
 type sourcePage struct {

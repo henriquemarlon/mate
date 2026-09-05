@@ -9,7 +9,7 @@ import (
 	"github.com/henriquemarlon/mate/internal/infra/anki"
 	"github.com/henriquemarlon/mate/internal/infra/repository/sqlite"
 	"github.com/henriquemarlon/mate/internal/service"
-	"github.com/henriquemarlon/mate/pkg/codex"
+	"github.com/henriquemarlon/mate/pkg/llm"
 	pkgservice "github.com/henriquemarlon/mate/pkg/service"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -29,7 +29,8 @@ func init() {
 	Cmd.Flags().String("study-dir", "", "Local folder containing synced GoodNotes PDFs")
 	Cmd.Flags().String("output-dir", "", "Directory for transcripts and generated study artifacts")
 	Cmd.Flags().String("state-db", "", "SQLite state database path")
-	Cmd.Flags().String("codex-bin", "", "Path or executable name for the official Codex CLI")
+	Cmd.Flags().String("llm-model", "", "Chat model identifier requested from the endpoint")
+	Cmd.Flags().String("llm-base-url", "", "OpenAI-compatible chat completion endpoint")
 	Cmd.Flags().String("anki-endpoint", "", "AnkiConnect HTTP endpoint")
 	Cmd.Flags().String("anki-deck", "", "Root Anki deck name")
 	Cmd.Flags().Int("dpi", 0, "PDF render DPI (72-600)")
@@ -40,7 +41,8 @@ func init() {
 	cobra.CheckErr(viper.BindPFlag(configs.STUDY_DIR, Cmd.Flags().Lookup("study-dir")))
 	cobra.CheckErr(viper.BindPFlag(configs.OUTPUT_DIR, Cmd.Flags().Lookup("output-dir")))
 	cobra.CheckErr(viper.BindPFlag(configs.STATE_DB, Cmd.Flags().Lookup("state-db")))
-	cobra.CheckErr(viper.BindPFlag(configs.CODEX_BIN, Cmd.Flags().Lookup("codex-bin")))
+	cobra.CheckErr(viper.BindPFlag(configs.LLM_MODEL, Cmd.Flags().Lookup("llm-model")))
+	cobra.CheckErr(viper.BindPFlag(configs.LLM_BASE_URL, Cmd.Flags().Lookup("llm-base-url")))
 	cobra.CheckErr(viper.BindPFlag(configs.ANKI_ENDPOINT, Cmd.Flags().Lookup("anki-endpoint")))
 	cobra.CheckErr(viper.BindPFlag(configs.ANKI_DECK, Cmd.Flags().Lookup("anki-deck")))
 	cobra.CheckErr(viper.BindPFlag(configs.DPI, Cmd.Flags().Lookup("dpi")))
@@ -73,9 +75,15 @@ func run(cmd *cobra.Command, _ []string) (err error) {
 		err = errors.Join(err, repo.Close())
 	}()
 
-	codexClient, err := codex.New(codex.Config{Binary: cfg.CodexBin, Logger: logger})
+	llmClient, err := llm.New(llm.Config{
+		APIKey:         cfg.LLMAPIKey.Value,
+		Model:          cfg.LLMModel,
+		BaseURL:        cfg.LLMBaseURL,
+		RequestTimeout: cfg.LLMTimeoutSeconds,
+		Logger:         logger,
+	})
 	if err != nil {
-		return fmt.Errorf("resolve codex binary (check MATE_CODEX_BIN or --codex-bin): %w", err)
+		return fmt.Errorf("configure llm client: %w", err)
 	}
 
 	ankiClient, err := anki.New(cfg.AnkiEndpoint, cfg.AnkiDeck)
@@ -87,7 +95,7 @@ func run(cmd *cobra.Command, _ []string) (err error) {
 		Config:     *cfg,
 		Logger:     logger,
 		Repository: repo,
-		Codex:      codexClient,
+		LLM:        llmClient,
 		Anki:       ankiClient,
 	})
 	if err != nil {

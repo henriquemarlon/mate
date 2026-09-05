@@ -5,6 +5,8 @@ package configs
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -18,7 +20,11 @@ func init() {
 const (
 	ANKI_DECK             = "MATE_ANKI_DECK"
 	ANKI_ENDPOINT         = "MATE_ANKI_ENDPOINT"
-	CODEX_BIN             = "MATE_CODEX_BIN"
+	LLM_API_KEY           = "MATE_LLM_API_KEY"
+	LLM_API_KEY_FILE      = "MATE_LLM_API_KEY_FILE"
+	LLM_BASE_URL          = "MATE_LLM_BASE_URL"
+	LLM_MODEL             = "MATE_LLM_MODEL"
+	LLM_TIMEOUT_SECONDS   = "MATE_LLM_TIMEOUT_SECONDS"
 	LOG_COLOR             = "MATE_LOG_COLOR"
 	LOG_LEVEL             = "MATE_LOG_LEVEL"
 	NOTIFICATIONS         = "MATE_NOTIFICATIONS"
@@ -32,7 +38,10 @@ const (
 func SetDefaults() {
 	viper.SetDefault(ANKI_DECK, "Mate")
 	viper.SetDefault(ANKI_ENDPOINT, "http://127.0.0.1:8765")
-	viper.SetDefault(CODEX_BIN, "codex")
+	viper.SetDefault(LLM_API_KEY, "")
+	viper.SetDefault(LLM_BASE_URL, "https://api.openai.com/v1")
+	viper.SetDefault(LLM_MODEL, "gpt-5.1")
+	viper.SetDefault(LLM_TIMEOUT_SECONDS, "600")
 	viper.SetDefault(LOG_COLOR, "true")
 	viper.SetDefault(LOG_LEVEL, "info")
 	viper.SetDefault(NOTIFICATIONS, "true")
@@ -46,7 +55,10 @@ func SetDefaults() {
 type MateConfig struct {
 	AnkiDeck            string
 	AnkiEndpoint        string
-	CodexBin            string
+	LLMAPIKey           RedactedString
+	LLMBaseURL          string
+	LLMModel            string
+	LLMTimeoutSeconds   Seconds
 	LogColor            Bool
 	LogLevel            LogLevel
 	Notifications       Bool
@@ -72,9 +84,24 @@ func LoadMateConfig() (*MateConfig, error) {
 		return nil, fmt.Errorf("failed to get %s: %w", ANKI_ENDPOINT, err)
 	}
 
-	cfg.CodexBin, err = GetCodexBin()
+	cfg.LLMAPIKey, err = GetLLMAPIKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s: %w", CODEX_BIN, err)
+		return nil, fmt.Errorf("failed to get %s: %w", LLM_API_KEY, err)
+	}
+
+	cfg.LLMBaseURL, err = GetLLMBaseURL()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", LLM_BASE_URL, err)
+	}
+
+	cfg.LLMModel, err = GetLLMModel()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", LLM_MODEL, err)
+	}
+
+	cfg.LLMTimeoutSeconds, err = GetLLMTimeoutSeconds()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s: %w", LLM_TIMEOUT_SECONDS, err)
 	}
 
 	cfg.LogColor, err = GetLogColor()
@@ -144,16 +171,61 @@ func GetAnkiEndpoint() (string, error) {
 	return notDefinedstring(), fmt.Errorf("%s: %w", ANKI_ENDPOINT, ErrNotDefined)
 }
 
-func GetCodexBin() (string, error) {
-	value := viper.GetString(CODEX_BIN)
+func GetLLMAPIKey() (RedactedString, error) {
+	value := viper.GetString(LLM_API_KEY)
+	if value == "" {
+		if filename := viper.GetString(LLM_API_KEY_FILE); filename != "" {
+			contents, err := os.ReadFile(filename)
+			if err != nil {
+				return notDefinedRedactedString(), fmt.Errorf("failed to read %s: %w", LLM_API_KEY_FILE, err)
+			}
+			value = strings.TrimSpace(string(contents))
+		}
+	}
 	if value != "" {
-		parsed, err := toString(value)
+		parsed, err := toRedactedString(value)
 		if err != nil {
-			return parsed, fmt.Errorf("failed to parse %s: %w", CODEX_BIN, err)
+			return parsed, fmt.Errorf("failed to parse %s: %w", LLM_API_KEY, err)
 		}
 		return parsed, nil
 	}
-	return notDefinedstring(), fmt.Errorf("%s: %w", CODEX_BIN, ErrNotDefined)
+	return notDefinedRedactedString(), fmt.Errorf("%s: %w", LLM_API_KEY, ErrNotDefined)
+}
+
+func GetLLMBaseURL() (string, error) {
+	value := viper.GetString(LLM_BASE_URL)
+	if value != "" {
+		parsed, err := toString(value)
+		if err != nil {
+			return parsed, fmt.Errorf("failed to parse %s: %w", LLM_BASE_URL, err)
+		}
+		return parsed, nil
+	}
+	return notDefinedstring(), fmt.Errorf("%s: %w", LLM_BASE_URL, ErrNotDefined)
+}
+
+func GetLLMModel() (string, error) {
+	value := viper.GetString(LLM_MODEL)
+	if value != "" {
+		parsed, err := toString(value)
+		if err != nil {
+			return parsed, fmt.Errorf("failed to parse %s: %w", LLM_MODEL, err)
+		}
+		return parsed, nil
+	}
+	return notDefinedstring(), fmt.Errorf("%s: %w", LLM_MODEL, ErrNotDefined)
+}
+
+func GetLLMTimeoutSeconds() (Seconds, error) {
+	value := viper.GetString(LLM_TIMEOUT_SECONDS)
+	if value != "" {
+		parsed, err := toSeconds(value)
+		if err != nil {
+			return parsed, fmt.Errorf("failed to parse %s: %w", LLM_TIMEOUT_SECONDS, err)
+		}
+		return parsed, nil
+	}
+	return notDefinedSeconds(), fmt.Errorf("%s: %w", LLM_TIMEOUT_SECONDS, ErrNotDefined)
 }
 
 func GetLogColor() (Bool, error) {

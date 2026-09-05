@@ -31,10 +31,29 @@ default = "Mate"
 description = "Root Anki deck; each source PDF is synchronized to a child deck"
 used-by = ["mate"]
 
-[codex.MATE_CODEX_BIN]
+[llm.MATE_LLM_API_KEY]
+go-type = "RedactedString"
+default = ""
+file = true
+description = "API key for the OpenAI-compatible endpoint; required at startup"
+used-by = ["mate"]
+
+[llm.MATE_LLM_MODEL]
 go-type = "string"
-default = "codex"
-description = "Official Codex CLI executable name or path"
+default = "gpt-5.1"
+description = "Chat model identifier requested from the OpenAI-compatible endpoint"
+used-by = ["mate"]
+
+[llm.MATE_LLM_BASE_URL]
+go-type = "string"
+default = "https://api.openai.com/v1"
+description = "OpenAI-compatible chat completion endpoint"
+used-by = ["mate"]
+
+[llm.MATE_LLM_TIMEOUT_SECONDS]
+go-type = "Seconds"
+default = "600"
+description = "Total cap in seconds on one model request"
 used-by = ["mate"]
 
 [polling.MATE_POLL_INTERVAL_SECONDS]

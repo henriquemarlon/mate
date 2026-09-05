@@ -18,12 +18,37 @@ AnkiConnect HTTP endpoint used to synchronize generated cards
 - Default: `http://127.0.0.1:8765`
 - Used by: `mate`
 
-## `MATE_CODEX_BIN`
+## `MATE_LLM_API_KEY`
 
-Official Codex CLI executable name or path
+API key for the OpenAI-compatible endpoint; required at startup
+
+- Type: `RedactedString`
+- Default: ``
+- File variant: `MATE_LLM_API_KEY_FILE` reads the value from the named file (Docker Compose secrets convention); the plain variable takes precedence
+- Used by: `mate`
+
+## `MATE_LLM_BASE_URL`
+
+OpenAI-compatible chat completion endpoint
 
 - Type: `string`
-- Default: `codex`
+- Default: `https://api.openai.com/v1`
+- Used by: `mate`
+
+## `MATE_LLM_MODEL`
+
+Chat model identifier requested from the OpenAI-compatible endpoint
+
+- Type: `string`
+- Default: `gpt-5.1`
+- Used by: `mate`
+
+## `MATE_LLM_TIMEOUT_SECONDS`
+
+Total cap in seconds on one model request
+
+- Type: `Seconds`
+- Default: `600`
 - Used by: `mate`
 
 ## `MATE_LOG_COLOR`

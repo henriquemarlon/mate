@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/henriquemarlon/mate/assets"
-	"github.com/henriquemarlon/mate/pkg/codex"
+	"github.com/henriquemarlon/mate/pkg/llm"
 )
 
 type TranscribeInputDTO struct {
@@ -28,19 +28,20 @@ type TranscribeOutputDTO struct {
 }
 
 type Transcriber struct {
-	client codex.Codex
+	client llm.Model
 }
 
-func New(client codex.Codex) *Transcriber {
+func New(client llm.Model) *Transcriber {
 	return &Transcriber{client: client}
 }
 
 func (t *Transcriber) Transcribe(ctx context.Context, input TranscribeInputDTO) (TranscribeOutputDTO, error) {
-	result, err := t.client.Execute(ctx, codex.Request{
-		Prompt:    transcriptionPrompt,
-		ImageData: input.ImageData,
-		MediaType: "image/png",
-		Schema:    assets.TranscriptionSchemaJSON,
+	result, err := t.client.Execute(ctx, llm.Request{
+		Prompt:     transcriptionPrompt,
+		ImageData:  input.ImageData,
+		MediaType:  "image/png",
+		SchemaName: "transcription",
+		Schema:     assets.TranscriptionSchemaJSON,
 	})
 	if err != nil {
 		return TranscribeOutputDTO{}, fmt.Errorf("transcription: transcribe: %w", err)

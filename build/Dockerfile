@@ -31,23 +31,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
         -o /bin/mate ./cmd/mate
 
 ################################################################################
-# Install the official standalone Codex package, including App Server support.
-FROM alpine:3.22 AS codex
-
-ARG CODEX_VERSION=0.147.0
-
-RUN apk add --no-cache ca-certificates curl \
-    && curl -fsSL https://chatgpt.com/codex/install.sh -o /tmp/install-codex.sh \
-    && CODEX_HOME=/opt/codex \
-       CODEX_INSTALL_DIR=/usr/local/bin \
-       CODEX_NON_INTERACTIVE=1 \
-       CODEX_RELEASE="${CODEX_VERSION}" \
-       sh /tmp/install-codex.sh \
-    && rm /tmp/install-codex.sh
-
-################################################################################
-# Create the minimal runtime image with Mate's two external runtime tools:
-# Codex App Server for model execution and Poppler's pdftoppm for PDF rendering.
+# Create the minimal runtime image with Mate's one external runtime tool:
+# Poppler's pdftoppm for PDF rendering. Model execution goes over HTTPS.
 FROM alpine:3.22 AS final
 
 LABEL org.opencontainers.image.source="https://github.com/henriquemarlon/mate"
@@ -60,7 +45,6 @@ RUN --mount=type=cache,target=/var/cache/apk \
         tzdata \
     && update-ca-certificates
 
-# Codex stores authentication and runtime state below the user's home directory.
 ARG UID=10001
 RUN adduser \
     --disabled-password \
@@ -71,8 +55,6 @@ RUN adduser \
     mate
 
 COPY --from=build /bin/mate /usr/local/bin/mate
-COPY --from=codex /opt/codex /opt/codex
-RUN ln -s /opt/codex/packages/standalone/current/bin/codex /usr/local/bin/codex
 
 USER mate
 WORKDIR /home/mate
