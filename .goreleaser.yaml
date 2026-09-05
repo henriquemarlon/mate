@@ -30,6 +30,7 @@ archives:
     name_template: "mate_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
+      - init/launchd/com.henriquemarlon.codex-proxy.plist
       - init/launchd/com.henriquemarlon.mate.plist
       - init/launchd/com.henriquemarlon.anki.plist
 

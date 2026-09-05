@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.henriquemarlon.codex-proxy</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/henriquemarlon/.local/share/mise/shims/openai-api-server-via-codex</string>
+		<string>--host</string>
+		<string>127.0.0.1</string>
+		<string>--port</string>
+		<string>18080</string>
+		<string>--auth-json</string>
+		<string>/Users/henriquemarlon/.codex/auth.json</string>
+		<string>--default-model</string>
+		<string>gpt-5.6-luna</string>
+	</array>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/Users/henriquemarlon/.local/share/mise/shims:/Users/henriquemarlon/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<key>StandardOutPath</key>
+	<string>/Users/henriquemarlon/.mate/codex-proxy.stdout.log</string>
+
+	<key>StandardErrorPath</key>
+	<string>/Users/henriquemarlon/.mate/codex-proxy.stderr.log</string>
+</dict>
+</plist>
