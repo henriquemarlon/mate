@@ -99,7 +99,7 @@ This setup is available only on macOS. The launchd agents under [`init/launchd`]
 - `com.henriquemarlon.mate.plist` starts Mate with the proxy endpoint, resolves Mate and Poppler through the mise shims, and restarts Mate if it exits;
 - `com.henriquemarlon.anki.plist` opens Anki Desktop hidden at login and re-opens it after a manual quit.
 
-The agents require absolute paths. Review the bundled plists and adapt their user-specific paths before installing them. Authenticate Codex and install every prerequisite listed above first; launchd does not inherit the login shell environment. Eino requires a non-empty API key, although the local proxy ignores its value, so store a placeholder in the file referenced by the Mate agent:
+The agents resolve user-specific paths from `$HOME` at runtime. No path changes are required when using the default `~/GoodNotes` and `~/.mate` directories. Authenticate Codex and install every prerequisite listed above first. Eino requires a non-empty API key, although the local proxy ignores its value, so store a placeholder in the file referenced by the Mate agent:
 
 ```sh
 mkdir -p "$HOME/.mate/output"

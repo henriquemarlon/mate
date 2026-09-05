@@ -7,22 +7,17 @@
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/henriquemarlon/.local/share/mise/shims/openai-api-server-via-codex</string>
-		<string>--host</string>
-		<string>127.0.0.1</string>
-		<string>--port</string>
-		<string>18080</string>
-		<string>--auth-json</string>
-		<string>/Users/henriquemarlon/.codex/auth.json</string>
-		<string>--default-model</string>
-		<string>gpt-5.6-luna</string>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>mkdir -p "$HOME/.mate" &amp;&amp;
+exec "$HOME/.local/share/mise/shims/openai-api-server-via-codex" \
+  --host 127.0.0.1 \
+  --port 18080 \
+  --auth-json "$HOME/.codex/auth.json" \
+  --default-model gpt-5.6-luna \
+  &gt;&gt;"$HOME/.mate/codex-proxy.stdout.log" \
+  2&gt;&gt;"$HOME/.mate/codex-proxy.stderr.log"</string>
 	</array>
-
-	<key>EnvironmentVariables</key>
-	<dict>
-		<key>PATH</key>
-		<string>/Users/henriquemarlon/.local/share/mise/shims:/Users/henriquemarlon/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
-	</dict>
 
 	<key>RunAtLoad</key>
 	<true/>
@@ -36,10 +31,5 @@
 	<key>ProcessType</key>
 	<string>Background</string>
 
-	<key>StandardOutPath</key>
-	<string>/Users/henriquemarlon/.mate/codex-proxy.stdout.log</string>
-
-	<key>StandardErrorPath</key>
-	<string>/Users/henriquemarlon/.mate/codex-proxy.stderr.log</string>
 </dict>
 </plist>
