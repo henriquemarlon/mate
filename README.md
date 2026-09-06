@@ -41,8 +41,14 @@ For a native Apple Silicon macOS installation:
 
    The mise Conda backend downloads Poppler and its runtime dependencies directly from conda-forge; Conda itself is not required.
 
-5. [Install Anki Desktop](https://apps.ankiweb.net/) and the [AnkiConnect add-on](https://ankiweb.net/shared/info/2055492159);
-6. Sync the GoodNotes or Google Drive PDFs to a local directory.
+5. Install rclone globally with mise and configure a remote supported by GoodNotes Auto Backup:
+
+   ```sh
+   mise use -g rclone@latest
+   rclone config
+   ```
+
+6. [Install Anki Desktop](https://apps.ankiweb.net/) and the [AnkiConnect add-on](https://ankiweb.net/shared/info/2055492159).
 
 Mate talks to the model through the [eino](https://github.com/cloudwego/eino) framework and the local [`openai-api-server-via-codex`](https://github.com/hotchpotch/openai-api-server-via-codex) bridge. The bridge is an unofficial project and uses the Codex authentication stored under `~/.codex`.
 
@@ -96,6 +102,7 @@ Anki Desktop must be running so Mate can reach AnkiConnect. The default polling 
 This setup is available only on macOS. The launchd agents under [`init/launchd`](init/launchd) automate every runtime process:
 
 - `com.henriquemarlon.codex-proxy.plist` keeps the loopback Codex proxy running through its mise-managed installation;
+- `com.mate.rclone.plist` mirrors GoodNotes PDF backups into `~/GoodNotes` every 15 minutes through its mise-managed installation;
 - `com.henriquemarlon.mate.plist` starts the mise-managed Mate with the proxy endpoint, makes the mise-managed Poppler available, and restarts Mate if it exits;
 - `com.henriquemarlon.anki.plist` opens Anki Desktop hidden at login and re-opens it after a manual quit.
 
@@ -105,10 +112,14 @@ The agents resolve user-specific paths from `$HOME` at runtime. No path changes 
 mkdir -p "$HOME/.mate/output"
 printf '%s' "codex-local" > "$HOME/.mate/llm_api_key"
 chmod 600 "$HOME/.mate/llm_api_key"
+printf '%s\n' "your-remote:GoodNotes" > "$HOME/.mate/rclone_source"
+chmod 600 "$HOME/.mate/rclone_source"
 cp init/launchd/com.henriquemarlon.codex-proxy.plist ~/Library/LaunchAgents/
+cp init/launchd/com.mate.rclone.plist ~/Library/LaunchAgents/
 cp init/launchd/com.henriquemarlon.mate.plist ~/Library/LaunchAgents/
 cp init/launchd/com.henriquemarlon.anki.plist ~/Library/LaunchAgents/
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.codex-proxy.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.mate.rclone.plist
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.mate.plist
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.henriquemarlon.anki.plist
 ```

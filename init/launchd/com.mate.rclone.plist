@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.mate.rclone</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>mkdir -p "$HOME/.mate" "$HOME/GoodNotes"
+{
+if [ ! -s "$HOME/.mate/rclone_source" ]; then
+  echo "missing rclone source: $HOME/.mate/rclone_source" &gt;&amp;2
+  exit 1
+fi
+rclone_source=$(/usr/bin/head -n 1 "$HOME/.mate/rclone_source")
+if [ -z "$rclone_source" ]; then
+  echo "empty rclone source: $HOME/.mate/rclone_source" &gt;&amp;2
+  exit 1
+fi
+exec "$HOME/.local/bin/mise" exec rclone -- rclone sync \
+  "$rclone_source" \
+  "$HOME/GoodNotes" \
+  --include="**.pdf" \
+  --create-empty-src-dirs
+} &gt;&gt;"$HOME/.mate/rclone.stdout.log" \
+  2&gt;&gt;"$HOME/.mate/rclone.stderr.log"</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>StartInterval</key>
+	<integer>900</integer>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>
