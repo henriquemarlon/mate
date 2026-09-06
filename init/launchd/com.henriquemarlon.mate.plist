@@ -11,7 +11,7 @@
 		<string>-c</string>
 		<string>mkdir -p "$HOME/.mate/output" &amp;&amp;
 export MATE_LLM_API_KEY_FILE="$HOME/.mate/llm_api_key" &amp;&amp;
-exec "$HOME/.local/share/mise/shims/mate" run \
+exec "$HOME/.local/bin/mise" exec github:henriquemarlon/mate -- mate run \
   --study-dir="$HOME/GoodNotes" \
   --output-dir="$HOME/.mate/output" \
   --state-db="$HOME/.mate/state.db" \

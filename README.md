@@ -18,10 +18,10 @@ Turn locally synced GoodNotes manuscripts into auditable study material.
 For a native Apple Silicon macOS installation:
 
 1. [Install mise](https://mise.jdx.dev/getting-started.html) 2026.8.11 or later;
-2. Install Codex and authenticate it:
+2. Install Codex globally with mise and authenticate it:
 
    ```sh
-   curl -fsSL https://chatgpt.com/codex/install.sh | sh
+   mise use -g github:openai/codex@latest
    codex login
    ```
 
@@ -95,8 +95,8 @@ Anki Desktop must be running so Mate can reach AnkiConnect. The default polling 
 
 This setup is available only on macOS. The launchd agents under [`init/launchd`](init/launchd) automate every runtime process:
 
-- `com.henriquemarlon.codex-proxy.plist` keeps the loopback Codex proxy running;
-- `com.henriquemarlon.mate.plist` starts Mate with the proxy endpoint, resolves Mate and Poppler through the mise shims, and restarts Mate if it exits;
+- `com.henriquemarlon.codex-proxy.plist` keeps the loopback Codex proxy running through its mise-managed installation;
+- `com.henriquemarlon.mate.plist` starts the mise-managed Mate with the proxy endpoint, makes the mise-managed Poppler available, and restarts Mate if it exits;
 - `com.henriquemarlon.anki.plist` opens Anki Desktop hidden at login and re-opens it after a manual quit.
 
 The agents resolve user-specific paths from `$HOME` at runtime. No path changes are required when using the default `~/GoodNotes` and `~/.mate` directories. Authenticate Codex and install every prerequisite listed above first. Eino requires a non-empty API key, although the local proxy ignores its value, so store a placeholder in the file referenced by the Mate agent:

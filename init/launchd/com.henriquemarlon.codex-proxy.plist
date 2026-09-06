@@ -10,7 +10,7 @@
 		<string>/bin/sh</string>
 		<string>-c</string>
 		<string>mkdir -p "$HOME/.mate" &amp;&amp;
-exec "$HOME/.local/share/mise/shims/openai-api-server-via-codex" \
+exec "$HOME/.local/bin/mise" exec github:hotchpotch/openai-api-server-via-codex -- openai-api-server-via-codex \
   --host 127.0.0.1 \
   --port 18080 \
   --auth-json "$HOME/.codex/auth.json" \
