@@ -69,6 +69,29 @@ func TestCardValidateAcceptsMultilineAndSecondDeletion(t *testing.T) {
 	}
 }
 
+func TestCardValidateAcceptsClozeWithoutExtraContext(t *testing.T) {
+	card := Card{
+		Type:  CardTypeCloze,
+		Front: "Bandwidth is {{c1::information transmitted per unit of time}}.",
+		Back:  "",
+	}
+
+	if err := card.Validate(); err != nil {
+		t.Fatalf("expected a cloze without extra context to be valid: %v", err)
+	}
+}
+
+func TestCardValidateRequiresBackForBasicAndReversed(t *testing.T) {
+	for _, cardType := range []CardType{CardTypeBasic, CardTypeReversed} {
+		t.Run(string(cardType), func(t *testing.T) {
+			card := Card{Type: cardType, Front: "What is bandwidth?", Back: ""}
+			if err := card.Validate(); !errors.Is(err, ErrInvalidCard) {
+				t.Fatalf("expected ErrInvalidCard, got %v", err)
+			}
+		})
+	}
+}
+
 func TestNewCardRejectsInvalidCloze(t *testing.T) {
 	if _, err := NewCard(CardTypeCloze, "No deletion here.", "Back", nil); !errors.Is(err, ErrInvalidCard) {
 		t.Fatalf("expected ErrInvalidCard, got %v", err)

@@ -59,7 +59,7 @@ const paradigmPrompt = `Generate study material only from the supplied transcrip
 Extract atomic concepts. The Cornell cue column may guide concepts, but content without a cue can still be useful.
 Do not generate cards from [?], administrative text, meta-notes, covers, blanks or duplicate concepts.
 Use Basic for definition/why/how, Cloze for formulas/sequences/exact facts, and Reversed only for terminology that benefits from both directions.
-A Cloze front must hide the tested span inline with Anki syntax {{c1::hidden text}}, using {{c2::...}} for a second independent deletion, and its back holds only extra context, never the answer.
+A Cloze front must hide the tested span inline with Anki syntax {{c1::hidden text}}, using {{c2::...}} for a second independent deletion. Its back holds only optional extra context, never the answer, and may be empty.
 Correct Cloze: front "Bandwidth is {{c1::the amount of information transmitted per unit of time}}." with back "Usually expressed in bits per second."
 Wrong Cloze: front "How is bandwidth defined?" with back "Amount of information divided by time." That is a Basic card; label it basic instead of writing a Cloze with no deletion.
 Each card must test one fact, avoid yes/no questions, and have a short answer. Preserve the transcript language and canonical technical terms.

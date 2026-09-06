@@ -67,7 +67,7 @@ func (c Card) Validate() error {
 	if strings.TrimSpace(c.Front) == "" {
 		return fmt.Errorf("%w: front cannot be empty", ErrInvalidCard)
 	}
-	if strings.TrimSpace(c.Back) == "" {
+	if c.Type != CardTypeCloze && strings.TrimSpace(c.Back) == "" {
 		return fmt.Errorf("%w: back cannot be empty", ErrInvalidCard)
 	}
 	if c.Type == CardTypeCloze && !clozeDeletion.MatchString(c.Front) {
