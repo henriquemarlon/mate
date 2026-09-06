@@ -22,8 +22,8 @@ type GenerateInputDTO struct {
 }
 
 type GenerateOutputDTO struct {
-	Feynman string        `json:"feynman"`
-	Cards   []entity.Card `json:"cards"`
+	Feynman []entity.FeynmanPrompt `json:"feynman"`
+	Cards   []entity.Card          `json:"cards"`
 }
 
 type Generator struct {
@@ -63,5 +63,7 @@ A Cloze front must hide the tested span inline with Anki syntax {{c1::hidden tex
 Correct Cloze: front "Bandwidth is {{c1::the amount of information transmitted per unit of time}}." with back "Usually expressed in bits per second."
 Wrong Cloze: front "How is bandwidth defined?" with back "Amount of information divided by time." That is a Basic card; label it basic instead of writing a Cloze with no deletion.
 Each card must test one fact, avoid yes/no questions, and have a short answer. Preserve the transcript language and canonical technical terms.
-The Feynman script must ask the learner to explain the concepts while the AI acts as a curious layperson. Do not generate exercises.
+Split the transcript into Feynman sessions, one per independent subject, and never mix unrelated topics in the same session.
+List in pages the exact transcript pages each session covers, and size each session for five to fifteen minutes of speaking.
+Each session content is a self-contained prompt the learner pastes into a voice assistant that cannot see the transcript, so it must restate the context it needs, ask the learner to explain the concepts, and instruct the assistant to act as a curious layperson. Do not generate exercises.
 Return only JSON matching the provided schema.`

@@ -4,8 +4,30 @@
   "additionalProperties": false,
   "properties": {
     "feynman": {
-      "type": "string",
-      "minLength": 1
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["title", "pages", "content"]
+      }
     },
     "cards": {
       "type": "array",

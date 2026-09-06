@@ -37,7 +37,11 @@ func writeMaterial(root, noteID string, material paradigm.GenerateOutputDTO) err
 	if err != nil {
 		return err
 	}
-	if err := writeAtomic(filepath.Join(dir, "feynman.md"), []byte(material.Feynman+"\n")); err != nil {
+	var feynman strings.Builder
+	for _, prompt := range material.Feynman {
+		fmt.Fprintf(&feynman, "# %s\n\n%s\n\n", prompt.Title, prompt.Content)
+	}
+	if err := writeAtomic(filepath.Join(dir, "feynman.md"), []byte(feynman.String())); err != nil {
 		return err
 	}
 	cards, err := json.MarshalIndent(material.Cards, "", "  ")

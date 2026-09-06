@@ -270,7 +270,7 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		return result, nil
 	}
 	if generated {
-		s.Logger.Info("study material generated", "note", noteID, "cards", len(material.Cards))
+		s.Logger.Info("study material generated", "note", noteID, "prompts", len(material.Feynman), "cards", len(material.Cards))
 	}
 	if err := writeMaterial(s.config.OutputDir, noteID, material); err != nil {
 		return result, err
