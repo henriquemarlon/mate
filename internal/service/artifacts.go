@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/henriquemarlon/mate/internal/domain/entity"
@@ -37,11 +38,7 @@ func writeMaterial(root, noteID string, material paradigm.GenerateOutputDTO) err
 	if err != nil {
 		return err
 	}
-	var feynman strings.Builder
-	for _, prompt := range material.Feynman {
-		fmt.Fprintf(&feynman, "# %s\n\n%s\n\n", prompt.Title, prompt.Content)
-	}
-	if err := writeAtomic(filepath.Join(dir, "feynman.md"), []byte(feynman.String())); err != nil {
+	if err := writeFeynmanPrompts(dir, noteID, material.Feynman); err != nil {
 		return err
 	}
 	cards, err := json.MarshalIndent(material.Cards, "", "  ")
@@ -49,6 +46,68 @@ func writeMaterial(root, noteID string, material paradigm.GenerateOutputDTO) err
 		return fmt.Errorf("artifacts: encode cards: %w", err)
 	}
 	return writeAtomic(filepath.Join(dir, "cards.json"), append(cards, '\n'))
+}
+
+// writeFeynmanPrompts gives every session its own file so one can be opened
+// and pasted whole into a voice assistant, and rebuilds the index from the
+// current sessions so it can never reference a file that is not there.
+func writeFeynmanPrompts(dir, noteID string, prompts []entity.FeynmanPrompt) error {
+	if len(prompts) == 0 {
+		return nil
+	}
+	promptDir := filepath.Join(dir, "feynman")
+	var index strings.Builder
+	fmt.Fprintf(&index, "# %s\n\n", strings.TrimSuffix(filepath.Base(noteID), filepath.Ext(noteID)))
+	for _, prompt := range prompts {
+		if err := prompt.Validate(); err != nil {
+			return fmt.Errorf("artifacts: %w", err)
+		}
+		name := prompt.ID + ".md"
+		content := fmt.Sprintf("# %s\n\n%s\n", prompt.Title, prompt.Content)
+		if err := writeAtomic(filepath.Join(promptDir, name), []byte(content)); err != nil {
+			return err
+		}
+		fmt.Fprintf(&index, "- [%s](%s)", prompt.Title, name)
+		if pages := formatPages(prompt.Pages); pages != "" {
+			fmt.Fprintf(&index, " — %s", pages)
+		}
+		index.WriteByte('\n')
+	}
+	if err := writeAtomic(filepath.Join(promptDir, "index.md"), []byte(index.String())); err != nil {
+		return err
+	}
+	// Only once every session is on disk can the pre-topic script go, so an
+	// interrupted write never leaves the note without any Feynman material.
+	if err := os.Remove(filepath.Join(dir, "feynman.md")); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("artifacts: remove legacy feynman script: %w", err)
+	}
+	return nil
+}
+
+// formatPages collapses consecutive pages into ranges, so a session covering
+// 3, 4 and 7 reads as "páginas 3–4, 7" instead of claiming everything between.
+func formatPages(pages []int) string {
+	if len(pages) == 0 {
+		return ""
+	}
+	var ranges []string
+	start := 0
+	for index := 1; index <= len(pages); index++ {
+		if index < len(pages) && pages[index] == pages[index-1]+1 {
+			continue
+		}
+		if start == index-1 {
+			ranges = append(ranges, strconv.Itoa(pages[start]))
+		} else {
+			ranges = append(ranges, fmt.Sprintf("%d–%d", pages[start], pages[index-1]))
+		}
+		start = index
+	}
+	label := "páginas"
+	if len(pages) == 1 {
+		label = "página"
+	}
+	return label + " " + strings.Join(ranges, ", ")
 }
 
 func writeReviewPage(root, noteID string, pageNumber int, pagePNG []byte, boxes [][]int) error {
