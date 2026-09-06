@@ -27,7 +27,7 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 
 	stored, err := s.repo.FindMaterial(noteID)
 	if err == nil && stored.SourceHash == sourceHash {
-		material, err := decodeMaterial(stored)
+		material, err := s.decodeMaterial(noteID, &stored)
 		return material, &stored, false, err
 	}
 	if err != nil && !errors.Is(err, entity.ErrMaterialNotFound) {
@@ -36,7 +36,7 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 
 	var previous paradigm.GenerateOutputDTO
 	if err == nil {
-		previous, err = decodeMaterial(stored)
+		previous, err = s.decodeMaterial(noteID, &stored)
 		if err != nil {
 			return paradigm.GenerateOutputDTO{}, nil, false, err
 		}
@@ -55,6 +55,7 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 	if err != nil {
 		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
+	generated.Cards, _ = s.normalizeCards(noteID, generated.Cards)
 	for index := range generated.Cards {
 		generated.Cards[index].Tags = append(generated.Cards[index].Tags, "mate")
 	}
@@ -126,10 +127,43 @@ func materialSource(pages []entity.Page) ([]paradigm.SourcePage, string, error) 
 	return input, hex.EncodeToString(hash[:]), nil
 }
 
-func decodeMaterial(stored entity.Material) (paradigm.GenerateOutputDTO, error) {
+// decodeMaterial also repairs what is already stored, so a note held back by
+// one malformed card recovers on the next run without spending another model
+// turn. The repaired JSON rides along on the caller's next SaveMaterial.
+func (s *Service) decodeMaterial(noteID string, stored *entity.Material) (paradigm.GenerateOutputDTO, error) {
 	material := paradigm.GenerateOutputDTO{Feynman: stored.Feynman}
 	if err := json.Unmarshal([]byte(stored.CardsJSON), &material.Cards); err != nil {
 		return paradigm.GenerateOutputDTO{}, fmt.Errorf("workflow: decode stored material cards: %w", err)
 	}
+	cards, repaired := s.normalizeCards(noteID, material.Cards)
+	material.Cards = cards
+	if repaired {
+		encoded, err := json.Marshal(cards)
+		if err != nil {
+			return paradigm.GenerateOutputDTO{}, fmt.Errorf("workflow: encode repaired material cards: %w", err)
+		}
+		stored.CardsJSON = string(encoded)
+	}
 	return material, nil
+}
+
+// normalizeCards repairs mislabeled cards and drops the ones that are still
+// unusable. A single bad card must never cost a note its other cards, so a
+// failure here is a warning and a skip rather than an error.
+func (s *Service) normalizeCards(noteID string, cards []entity.Card) ([]entity.Card, bool) {
+	result := make([]entity.Card, 0, len(cards))
+	repaired := false
+	for _, card := range cards {
+		if card.Normalize() {
+			s.Logger.Warn("cloze card without a deletion converted to basic", "note", noteID, "front", card.Front)
+			repaired = true
+		}
+		if err := card.Validate(); err != nil {
+			s.Logger.Warn("card discarded", "note", noteID, "type", card.Type, "front", card.Front, "error", err)
+			repaired = true
+			continue
+		}
+		result = append(result, card)
+	}
+	return result, repaired
 }

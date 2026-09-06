@@ -3,10 +3,16 @@ package entity
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 var ErrInvalidCard = errors.New("invalid card")
+
+// clozeDeletion matches Anki's cloze deletion syntax, {{c<number>::text}}.
+// A cloze note without one hides nothing, so Anki rejects it and the whole
+// batch fails; this is the check that keeps that from reaching the sync.
+var clozeDeletion = regexp.MustCompile(`(?s)\{\{c\d+::.+?\}\}`)
 
 type CardType string
 
@@ -30,13 +36,29 @@ func NewCard(cardType CardType, front, back string, tags []string) (*Card, error
 		Back:  back,
 		Tags:  tags,
 	}
-	if err := card.validate(); err != nil {
+	if err := card.Validate(); err != nil {
 		return nil, err
 	}
 	return card, nil
 }
 
-func (c *Card) validate() error {
+// Normalize canonicalizes a card and repairs the one mistake models make
+// often enough to matter: a cloze whose front carries no deletion is a basic
+// card wearing the wrong label. Converting it keeps the rest of the batch
+// usable. It reports whether the card's meaning changed, so callers can log
+// the downgrade and persist the repair. Trimming alone is not a change.
+func (c *Card) Normalize() bool {
+	c.Type = CardType(strings.ToLower(strings.TrimSpace(string(c.Type))))
+	c.Front = strings.TrimSpace(c.Front)
+	c.Back = strings.TrimSpace(c.Back)
+	if c.Type == CardTypeCloze && !clozeDeletion.MatchString(c.Front) {
+		c.Type = CardTypeBasic
+		return true
+	}
+	return false
+}
+
+func (c Card) Validate() error {
 	switch c.Type {
 	case CardTypeBasic, CardTypeReversed, CardTypeCloze:
 	default:
@@ -47,6 +69,9 @@ func (c *Card) validate() error {
 	}
 	if strings.TrimSpace(c.Back) == "" {
 		return fmt.Errorf("%w: back cannot be empty", ErrInvalidCard)
+	}
+	if c.Type == CardTypeCloze && !clozeDeletion.MatchString(c.Front) {
+		return fmt.Errorf("%w: cloze front has no {{c1::...}} deletion", ErrInvalidCard)
 	}
 	return nil
 }

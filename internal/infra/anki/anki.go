@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -20,11 +19,6 @@ const (
 	reversedNoteType = "Mate Reversed"
 	clozeNoteType    = "Mate Cloze"
 )
-
-// clozePattern matches the minimal cloze deletion syntax Anki requires,
-// {{c<number>::, so malformed cloze cards fail here with a clear error
-// instead of failing opaquely at addNote.
-var clozePattern = regexp.MustCompile(`\{\{c\d+::`)
 
 type SyncInputDTO struct {
 	NoteID string
@@ -73,11 +67,11 @@ func (c *Client) Sync(ctx context.Context, input SyncInputDTO) (SyncOutputDTO, e
 
 	prepared := make([]ankiconnect.Note, 0, len(input.Cards))
 	for _, card := range input.Cards {
-		card.Type = entity.CardType(strings.ToLower(strings.TrimSpace(string(card.Type))))
-		card.Front = strings.TrimSpace(card.Front)
-		card.Back = strings.TrimSpace(card.Back)
-		if card.Front == "" || card.Back == "" {
-			return output, errors.New("anki: card front and back cannot be empty")
+		// Callers normalize before reaching this point, so an invalid card
+		// here is a bug rather than a model mistake and must fail loudly.
+		card.Normalize()
+		if err := card.Validate(); err != nil {
+			return output, fmt.Errorf("anki: %w", err)
 		}
 
 		// The MateID field is the stable identity that lets Sync update an
@@ -118,9 +112,6 @@ func (c *Client) Sync(ctx context.Context, input SyncInputDTO) (SyncOutputDTO, e
 			item.ModelName = reversedNoteType
 			item.Fields = map[string]string{"MateID": mateID, "Front": card.Front, "Back": card.Back}
 		case entity.CardTypeCloze:
-			if !clozePattern.MatchString(card.Front) {
-				return output, fmt.Errorf("anki: cloze card does not contain a cloze deletion: %q", card.Front)
-			}
 			item.ModelName = clozeNoteType
 			item.Fields = map[string]string{"MateID": mateID, "Text": card.Front, "Extra": card.Back}
 		default:
