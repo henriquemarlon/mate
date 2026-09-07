@@ -99,6 +99,31 @@ func TestWriteMaterialKeepsLegacyPromptWithoutPages(t *testing.T) {
 	}
 }
 
+func TestWriteMaterialRemovesStalePromptFiles(t *testing.T) {
+	root := t.TempDir()
+	first := paradigm.GenerateOutputDTO{Feynman: []entity.FeynmanPrompt{
+		promptFixture("003-003-modelos", "Modelos", []int{3}),
+	}}
+	if err := writeMaterial(root, "note.pdf", first); err != nil {
+		t.Fatalf("expected the first material to be written: %v", err)
+	}
+
+	second := paradigm.GenerateOutputDTO{Feynman: []entity.FeynmanPrompt{
+		promptFixture("003-003-modelos-revisados", "Modelos revisados", []int{3}),
+	}}
+	if err := writeMaterial(root, "note.pdf", second); err != nil {
+		t.Fatalf("expected the replacement material to be written: %v", err)
+	}
+
+	dir := filepath.Join(root, "note", "feynman")
+	if _, err := os.Stat(filepath.Join(dir, "003-003-modelos.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected the stale prompt to be removed, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "003-003-modelos-revisados.md")); err != nil {
+		t.Fatalf("expected the replacement prompt to remain: %v", err)
+	}
+}
+
 func TestFormatPagesCollapsesRuns(t *testing.T) {
 	cases := []struct {
 		pages    []int

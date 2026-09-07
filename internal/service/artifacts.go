@@ -56,6 +56,7 @@ func writeFeynmanPrompts(dir, noteID string, prompts []entity.FeynmanPrompt) err
 		return nil
 	}
 	promptDir := filepath.Join(dir, "feynman")
+	desired := map[string]struct{}{"index.md": {}}
 	var index strings.Builder
 	fmt.Fprintf(&index, "# %s\n\n", strings.TrimSuffix(filepath.Base(noteID), filepath.Ext(noteID)))
 	for _, prompt := range prompts {
@@ -63,6 +64,7 @@ func writeFeynmanPrompts(dir, noteID string, prompts []entity.FeynmanPrompt) err
 			return fmt.Errorf("artifacts: %w", err)
 		}
 		name := prompt.ID + ".md"
+		desired[name] = struct{}{}
 		content := fmt.Sprintf("# %s\n\n%s\n", prompt.Title, prompt.Content)
 		if err := writeAtomic(filepath.Join(promptDir, name), []byte(content)); err != nil {
 			return err
@@ -75,6 +77,21 @@ func writeFeynmanPrompts(dir, noteID string, prompts []entity.FeynmanPrompt) err
 	}
 	if err := writeAtomic(filepath.Join(promptDir, "index.md"), []byte(index.String())); err != nil {
 		return err
+	}
+	entries, err := os.ReadDir(promptDir)
+	if err != nil {
+		return fmt.Errorf("artifacts: list Feynman prompts: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
+			continue
+		}
+		if _, found := desired[entry.Name()]; found {
+			continue
+		}
+		if err := os.Remove(filepath.Join(promptDir, entry.Name())); err != nil {
+			return fmt.Errorf("artifacts: remove stale Feynman prompt %s: %w", entry.Name(), err)
+		}
 	}
 	// Only once every session is on disk can the pre-topic script go, so an
 	// interrupted write never leaves the note without any Feynman material.

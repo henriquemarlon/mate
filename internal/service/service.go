@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -251,6 +252,9 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		return result, err
 	}
 	if len(pendingGeneration) == 0 {
+		if err := s.migrateStoredMaterial(noteID); err != nil {
+			return result, err
+		}
 		return result, nil
 	}
 	processed, err := s.repo.FindProcessedPages(noteID)
@@ -298,4 +302,32 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		return result, err
 	}
 	return result, nil
+}
+
+// migrateStoredMaterial upgrades generated material even when every page is
+// already done. Without this path, an unchanged notebook would keep the
+// pre-topic feynman.md forever because normal generation has nothing to do.
+func (s *Service) migrateStoredMaterial(noteID string) error {
+	stored, err := s.repo.FindMaterial(noteID)
+	if errors.Is(err, entity.ErrMaterialNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	material, changed, err := s.decodeMaterial(noteID, &stored)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	if err := writeMaterial(s.config.OutputDir, noteID, material); err != nil {
+		return err
+	}
+	if err := s.repo.SaveMaterial(&stored); err != nil {
+		return err
+	}
+	s.Logger.Info("stored material migrated", "note", noteID)
+	return nil
 }

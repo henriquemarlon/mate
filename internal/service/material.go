@@ -28,35 +28,43 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 
 	stored, err := s.repo.FindMaterial(noteID)
 	if err == nil && stored.SourceHash == sourceHash {
-		material, err := s.decodeMaterial(noteID, &stored)
-		return material, &stored, false, err
+		material, changed, err := s.decodeMaterial(noteID, &stored)
+		if err != nil {
+			return paradigm.GenerateOutputDTO{}, nil, false, err
+		}
+		if changed {
+			if err := s.repo.SaveMaterial(&stored); err != nil {
+				return paradigm.GenerateOutputDTO{}, nil, false, err
+			}
+		}
+		return material, &stored, false, nil
 	}
 	if err != nil && !errors.Is(err, entity.ErrMaterialNotFound) {
 		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
 
 	var previous paradigm.GenerateOutputDTO
+	var replacedPromptIDs map[string]struct{}
 	if err == nil {
-		previous, err = s.decodeMaterial(noteID, &stored)
+		previous, _, err = s.decodeMaterial(noteID, &stored)
 		if err != nil {
 			return paradigm.GenerateOutputDTO{}, nil, false, err
 		}
-		source = source[:0]
-		for _, page := range pending {
-			if strings.TrimSpace(page.Transcription) != "" {
-				source = append(source, paradigm.SourcePage{Number: page.PageNumber, Markdown: page.Transcription})
-			}
-		}
+		source, replacedPromptIDs = feynmanGenerationSource(pages, pending, previous.Feynman)
 		if len(source) == 0 {
 			return paradigm.GenerateOutputDTO{}, nil, false, errors.New("workflow: material source changed without transcribed pages")
 		}
+		previous.Feynman = keepUnchangedPrompts(previous.Feynman, replacedPromptIDs)
 	}
 
 	generated, err := s.paradigm.Generate(ctx, paradigm.GenerateInputDTO{NoteID: noteID, Pages: source})
 	if err != nil {
 		return paradigm.GenerateOutputDTO{}, nil, false, err
 	}
-	generated.Feynman = s.identifyPrompts(noteID, generated.Feynman, source)
+	generated.Feynman, err = s.identifyPrompts(noteID, generated.Feynman, source)
+	if err != nil {
+		return paradigm.GenerateOutputDTO{}, nil, false, err
+	}
 	generated.Cards, _ = s.normalizeCards(noteID, generated.Cards)
 	for index := range generated.Cards {
 		generated.Cards[index].Tags = append(generated.Cards[index].Tags, "mate")
@@ -80,27 +88,27 @@ func (s *Service) material(ctx context.Context, noteID string, pages, pending []
 	return material, created, true, nil
 }
 
-// mergeMaterial keeps what earlier runs produced and appends only what is
-// new. Later runs see just the pages transcribed since, so a session already
-// written is never regenerated; dedup by ID guards the case where it is.
+// mergeMaterial keeps unaffected work, replaces a prompt when its identified
+// source changed, and appends genuinely new prompts and cards.
 func mergeMaterial(previous, generated paradigm.GenerateOutputDTO) paradigm.GenerateOutputDTO {
-	if len(previous.Feynman) == 0 && len(previous.Cards) == 0 {
-		return sortPrompts(generated)
-	}
 	result := paradigm.GenerateOutputDTO{
 		Feynman: append([]entity.FeynmanPrompt(nil), previous.Feynman...),
 		Cards:   append([]entity.Card(nil), previous.Cards...),
 	}
-	knownPrompts := make(map[string]struct{}, len(result.Feynman))
-	for _, prompt := range result.Feynman {
-		knownPrompts[prompt.ID] = struct{}{}
+	knownPrompts := make(map[string]int, len(result.Feynman))
+	for index, prompt := range result.Feynman {
+		knownPrompts[prompt.ID] = index
 	}
 	for _, prompt := range generated.Feynman {
-		if _, found := knownPrompts[prompt.ID]; found {
+		if index, found := knownPrompts[prompt.ID]; found {
+			current := result.Feynman[index]
+			if current.SourceHash != prompt.SourceHash || current.Title != prompt.Title || current.Content != prompt.Content {
+				result.Feynman[index] = prompt
+			}
 			continue
 		}
-		knownPrompts[prompt.ID] = struct{}{}
 		result.Feynman = append(result.Feynman, prompt)
+		knownPrompts[prompt.ID] = len(result.Feynman) - 1
 	}
 	existing := make(map[string]struct{}, len(result.Cards))
 	for _, card := range result.Cards {
@@ -135,21 +143,93 @@ func sortPrompts(material paradigm.GenerateOutputDTO) paradigm.GenerateOutputDTO
 	return material
 }
 
-// identifyPrompts derives the identity Mate owns and drops what the model got
-// wrong. A single bad session must never cost a note its other sessions, so a
-// failure here is a warning and a skip rather than an error.
-func (s *Service) identifyPrompts(noteID string, prompts []entity.FeynmanPrompt, source []paradigm.SourcePage) []entity.FeynmanPrompt {
+// identifyPrompts derives the identity Mate owns and drops malformed prompts.
+// The batch is rejected when that would leave any source page uncovered, so
+// pages are never marked done without corresponding Feynman material.
+func (s *Service) identifyPrompts(noteID string, prompts []entity.FeynmanPrompt, source []paradigm.SourcePage) ([]entity.FeynmanPrompt, error) {
 	available := make(map[int]string, len(source))
 	for _, page := range source {
 		available[page.Number] = page.Markdown
 	}
 	result := make([]entity.FeynmanPrompt, 0, len(prompts))
+	covered := make(map[int]struct{}, len(source))
 	for _, prompt := range prompts {
 		if err := prompt.Identify(available); err != nil {
 			s.Logger.Warn("feynman prompt discarded", "note", noteID, "title", prompt.Title, "error", err)
 			continue
 		}
 		result = append(result, prompt)
+		for _, page := range prompt.Pages {
+			covered[page] = struct{}{}
+		}
+	}
+	missing := make([]int, 0)
+	for _, page := range source {
+		if _, found := covered[page.Number]; !found {
+			missing = append(missing, page.Number)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("%w: prompts do not cover pages %v", entity.ErrInvalidFeynmanPrompt, missing)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("%w: model returned no prompts", entity.ErrInvalidFeynmanPrompt)
+	}
+	return result, nil
+}
+
+// feynmanGenerationSource starts with newly transcribed pages. If one of
+// those pages belonged to an earlier prompt, the whole connected group of
+// prompts is regenerated so an edit cannot leave a mixed old/new session.
+func feynmanGenerationSource(pages, pending []entity.Page, previous []entity.FeynmanPrompt) ([]paradigm.SourcePage, map[string]struct{}) {
+	selected := make(map[int]struct{}, len(pending))
+	for _, page := range pending {
+		if strings.TrimSpace(page.Transcription) != "" {
+			selected[page.PageNumber] = struct{}{}
+		}
+	}
+	replaced := make(map[string]struct{})
+	changed := true
+	for changed {
+		changed = false
+		for _, prompt := range previous {
+			if _, found := replaced[prompt.ID]; found || !promptTouchesPages(prompt, selected) {
+				continue
+			}
+			replaced[prompt.ID] = struct{}{}
+			for _, page := range prompt.Pages {
+				if _, found := selected[page]; !found {
+					selected[page] = struct{}{}
+					changed = true
+				}
+			}
+		}
+	}
+
+	source := make([]paradigm.SourcePage, 0, len(selected))
+	for _, page := range pages {
+		if _, found := selected[page.PageNumber]; found && strings.TrimSpace(page.Transcription) != "" {
+			source = append(source, paradigm.SourcePage{Number: page.PageNumber, Markdown: page.Transcription})
+		}
+	}
+	return source, replaced
+}
+
+func promptTouchesPages(prompt entity.FeynmanPrompt, pages map[int]struct{}) bool {
+	for _, page := range prompt.Pages {
+		if _, found := pages[page]; found {
+			return true
+		}
+	}
+	return false
+}
+
+func keepUnchangedPrompts(prompts []entity.FeynmanPrompt, replaced map[string]struct{}) []entity.FeynmanPrompt {
+	result := make([]entity.FeynmanPrompt, 0, len(prompts))
+	for _, prompt := range prompts {
+		if _, found := replaced[prompt.ID]; !found {
+			result = append(result, prompt)
+		}
 	}
 	return result
 }
@@ -188,35 +268,35 @@ func materialSource(pages []entity.Page) ([]paradigm.SourcePage, string, error) 
 // decodeMaterial also repairs what is already stored, so a note held back by
 // one malformed card recovers on the next run without spending another model
 // turn. The repaired JSON rides along on the caller's next SaveMaterial.
-func (s *Service) decodeMaterial(noteID string, stored *entity.Material) (paradigm.GenerateOutputDTO, error) {
+func (s *Service) decodeMaterial(noteID string, stored *entity.Material) (paradigm.GenerateOutputDTO, bool, error) {
 	var material paradigm.GenerateOutputDTO
 	if err := json.Unmarshal([]byte(stored.CardsJSON), &material.Cards); err != nil {
-		return paradigm.GenerateOutputDTO{}, fmt.Errorf("workflow: decode stored material cards: %w", err)
+		return paradigm.GenerateOutputDTO{}, false, fmt.Errorf("workflow: decode stored material cards: %w", err)
 	}
 	cards, repaired := s.normalizeCards(noteID, material.Cards)
 	material.Cards = cards
 	if repaired {
 		encoded, err := json.Marshal(cards)
 		if err != nil {
-			return paradigm.GenerateOutputDTO{}, fmt.Errorf("workflow: encode repaired material cards: %w", err)
+			return paradigm.GenerateOutputDTO{}, false, fmt.Errorf("workflow: encode repaired material cards: %w", err)
 		}
 		stored.CardsJSON = string(encoded)
 	}
 
 	prompts, migrated, err := decodeFeynmanPrompts(stored.FeynmanPromptsJSON)
 	if err != nil {
-		return paradigm.GenerateOutputDTO{}, err
+		return paradigm.GenerateOutputDTO{}, false, err
 	}
 	material.Feynman = prompts
 	if migrated {
 		s.Logger.Warn("legacy feynman script wrapped as a single prompt", "note", noteID)
 		encoded, err := json.Marshal(prompts)
 		if err != nil {
-			return paradigm.GenerateOutputDTO{}, fmt.Errorf("workflow: encode migrated feynman prompts: %w", err)
+			return paradigm.GenerateOutputDTO{}, false, fmt.Errorf("workflow: encode migrated feynman prompts: %w", err)
 		}
 		stored.FeynmanPromptsJSON = string(encoded)
 	}
-	return material, nil
+	return material, repaired || migrated, nil
 }
 
 // decodeFeynmanPrompts reads the "feynman" column, which held one Markdown

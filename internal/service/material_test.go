@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/henriquemarlon/mate/internal/domain/entity"
@@ -135,6 +137,33 @@ func TestMaterialDropsPromptsCitingPagesOutsideTheBatch(t *testing.T) {
 	}
 }
 
+func TestMaterialRejectsIncompleteFeynmanCoverage(t *testing.T) {
+	tests := map[string]string{
+		"no prompts": `{"feynman": [], "cards": []}`,
+		"missing page": `{
+			"feynman": [{"title": "Modelos", "pages": [3], "content": "Explique."}],
+			"cards": []
+		}`,
+	}
+	for name, response := range tests {
+		t.Run(name, func(t *testing.T) {
+			model := &fakeModel{responses: []string{response}}
+			service, repo := newTestService(model)
+			pages := []entity.Page{
+				transcribedPage(3, "modelos"),
+				transcribedPage(4, "mais modelos"),
+			}
+
+			if _, _, _, err := service.material(context.Background(), "note.pdf", pages, pages); !errors.Is(err, entity.ErrInvalidFeynmanPrompt) {
+				t.Fatalf("expected ErrInvalidFeynmanPrompt, got %v", err)
+			}
+			if repo.saves != 0 {
+				t.Fatalf("expected invalid material not to be persisted, got %d saves", repo.saves)
+			}
+		})
+	}
+}
+
 func TestMaterialIsIdempotentWhenNothingChanged(t *testing.T) {
 	model := &fakeModel{responses: []string{`{
 		"feynman": [{"title": "Modelos fundamentais", "pages": [3], "content": "Explique."}],
@@ -198,6 +227,38 @@ func TestMaterialAppendsPromptsForNewPagesOnly(t *testing.T) {
 	}
 }
 
+func TestMaterialRegeneratesTheWholePromptWhenACoveredPageChanges(t *testing.T) {
+	model := &fakeModel{responses: []string{
+		`{"feynman": [{"title": "Modelos", "pages": [3, 4], "content": "Explicação original."}], "cards": []}`,
+		`{"feynman": [{"title": "Modelos", "pages": [3, 4], "content": "Explicação revisada."}], "cards": []}`,
+	}}
+	service, _ := newTestService(model)
+	firstPages := []entity.Page{
+		transcribedPage(3, "modelos"),
+		transcribedPage(4, "mais modelos"),
+	}
+	first, _, _, err := service.material(context.Background(), "note.pdf", firstPages, firstPages)
+	if err != nil {
+		t.Fatalf("expected the first generation to succeed: %v", err)
+	}
+
+	revisedPage := transcribedPage(3, "modelos revisados")
+	revisedPages := []entity.Page{revisedPage, firstPages[1]}
+	second, _, _, err := service.material(context.Background(), "note.pdf", revisedPages, []entity.Page{revisedPage})
+	if err != nil {
+		t.Fatalf("expected the affected prompt to be regenerated: %v", err)
+	}
+	if len(second.Feynman) != 1 {
+		t.Fatalf("expected the old prompt to be replaced, got %d prompts", len(second.Feynman))
+	}
+	if second.Feynman[0].Content != "Explicação revisada." {
+		t.Fatalf("expected revised content, got %q", second.Feynman[0].Content)
+	}
+	if second.Feynman[0].SourceHash == first.Feynman[0].SourceHash {
+		t.Fatal("expected the revised source to produce a new hash")
+	}
+}
+
 func TestMaterialKeepsLegacyMarkdownScript(t *testing.T) {
 	service, repo := newTestService(&fakeModel{})
 	pages := []entity.Page{transcribedPage(3, "modelos")}
@@ -233,5 +294,34 @@ func TestMaterialKeepsLegacyMarkdownScript(t *testing.T) {
 	}
 	if len(migrated) != 1 || migrated[0].ID != "revisao-geral" {
 		t.Fatalf("expected the staged migration to hold the legacy prompt, got %+v", migrated)
+	}
+}
+
+func TestMigrateStoredMaterialPersistsLegacyPromptWithoutNewPages(t *testing.T) {
+	service, repo := newTestService(&fakeModel{})
+	service.config.OutputDir = t.TempDir()
+	repo.material = &entity.Material{
+		NoteID:             "note.pdf",
+		SourceHash:         "source",
+		SyncedHash:         "source",
+		FeynmanPromptsJSON: "# Roteiro\n\nExplique tudo.",
+		CardsJSON:          "[]",
+	}
+
+	if err := service.migrateStoredMaterial("note.pdf"); err != nil {
+		t.Fatalf("expected the legacy material to migrate: %v", err)
+	}
+	if repo.saves != 1 {
+		t.Fatalf("expected the migration to be persisted once, got %d saves", repo.saves)
+	}
+	if _, err := os.Stat(filepath.Join(service.config.OutputDir, "note", "feynman", "revisao-geral.md")); err != nil {
+		t.Fatalf("expected the migrated prompt artifact: %v", err)
+	}
+
+	if err := service.migrateStoredMaterial("note.pdf"); err != nil {
+		t.Fatalf("expected the persisted migration to be idempotent: %v", err)
+	}
+	if repo.saves != 1 {
+		t.Fatalf("expected no second save after migration, got %d", repo.saves)
 	}
 }
