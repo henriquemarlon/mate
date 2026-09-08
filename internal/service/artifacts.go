@@ -128,7 +128,7 @@ func formatPages(pages []int) string {
 }
 
 func writeReviewPage(root, noteID string, pageNumber int, pagePNG []byte, boxes [][]int) error {
-	dir, err := noteDirectory(root, noteID)
+	path, err := reviewPagePath(root, noteID, pageNumber)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,29 @@ func writeReviewPage(root, noteID string, pageNumber int, pagePNG []byte, boxes 
 	if err != nil {
 		return fmt.Errorf("artifacts: annotate review page: %w", err)
 	}
-	return writeAtomic(filepath.Join(dir, "review", fmt.Sprintf("page-%d.png", pageNumber)), annotated)
+	return writeAtomic(path, annotated)
+}
+
+func reviewPagePath(root, noteID string, pageNumber int) (string, error) {
+	dir, err := noteDirectory(root, noteID)
+	if err != nil {
+		return "", err
+	}
+	if pageNumber <= 0 {
+		return "", fmt.Errorf("artifacts: invalid review page number %d", pageNumber)
+	}
+	return filepath.Join(dir, "review", fmt.Sprintf("page-%d.png", pageNumber)), nil
+}
+
+func removeReviewPage(root, noteID string, pageNumber int) error {
+	path, err := reviewPagePath(root, noteID, pageNumber)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("artifacts: remove review page: %w", err)
+	}
+	return nil
 }
 
 func noteDirectory(root, noteID string) (string, error) {

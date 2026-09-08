@@ -9,6 +9,7 @@ type PageRepository interface {
 	UpdatePages(pages []entity.Page) error
 	FindProcessedPages(noteID string) ([]entity.Page, error)
 	FindPagesByStatus(noteID string, status entity.PageStatus) ([]entity.Page, error)
+	FindAllPagesByStatus(status entity.PageStatus) ([]entity.Page, error)
 }
 
 type MaterialRepository interface {

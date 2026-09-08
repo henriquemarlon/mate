@@ -29,6 +29,7 @@ type Repository interface {
 	UpdatePages(pages []entity.Page) error
 	FindProcessedPages(noteID string) ([]entity.Page, error)
 	FindPagesByStatus(noteID string, status entity.PageStatus) ([]entity.Page, error)
+	FindAllPagesByStatus(status entity.PageStatus) ([]entity.Page, error)
 	SaveMaterial(material *entity.Material) error
 	FindMaterial(noteID string) (entity.Material, error)
 }
@@ -46,7 +47,7 @@ type Service struct {
 	repo        Repository
 	transcriber *transcriber.Transcriber
 	paradigm    *paradigm.Generator
-	anki        *anki.Client
+	anki        Anki
 }
 
 var _ service.SupervisedService = (*Service)(nil)
@@ -54,13 +55,17 @@ var _ service.TickImpl = (*Service)(nil)
 
 const ServiceName = "mate"
 
+type Anki interface {
+	Sync(context.Context, anki.SyncInputDTO) (anki.SyncOutputDTO, error)
+}
+
 // CreateInfo contains the configuration for creating the Mate service.
 type CreateInfo struct {
 	Config     configs.MateConfig
 	Logger     *slog.Logger
 	Repository Repository
 	LLM        llm.Model
-	Anki       *anki.Client
+	Anki       Anki
 }
 
 // Create initializes the Mate service from already-acquired dependencies.
@@ -150,7 +155,7 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 			// so this is the only signal that a page is waiting for a human.
 			// Headless hosts have no notification server; failures are debug
 			// noise, never a tick error.
-			message := fmt.Sprintf("%s: %d page(s) need review", filepath.Base(path), noteSummary.NeedsReview)
+			message := fmt.Sprintf("%s: %d page(s) need review. Run mate review.", filepath.Base(path), noteSummary.NeedsReview)
 			if err := beeep.Notify("Mate", message, ""); err != nil {
 				s.Logger.Debug("review notification failed", "note", path, "error", err)
 			}
@@ -247,61 +252,67 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 		result.PagesProcessed++
 	}
 
+	return result, s.completeNote(ctx, noteID)
+}
+
+// completeNote writes the current transcript and finishes any material work
+// left by either the unattended run or an interactive review.
+func (s *Service) completeNote(ctx context.Context, noteID string) error {
+	processed, err := s.repo.FindProcessedPages(noteID)
+	if err != nil {
+		return err
+	}
+	if err := writeTranscript(s.config.OutputDir, noteID, processed); err != nil {
+		return err
+	}
 	pendingGeneration, err := s.repo.FindPagesByStatus(noteID, entity.PageStatusTranscribed)
 	if err != nil {
-		return result, err
+		return err
 	}
 	if len(pendingGeneration) == 0 {
 		if err := s.migrateStoredMaterial(noteID); err != nil {
-			return result, err
+			return err
 		}
-		return result, nil
-	}
-	processed, err := s.repo.FindProcessedPages(noteID)
-	if err != nil {
-		return result, err
-	}
-	if err := writeTranscript(s.config.OutputDir, noteID, processed); err != nil {
-		return result, err
+		return nil
 	}
 	material, stored, generated, err := s.material(ctx, noteID, processed, pendingGeneration)
 	if err != nil {
 		if ctx.Err() != nil {
-			return result, err
+			return err
 		}
 		// Pages stay transcribed, so the next run retries generation or sync.
 		s.Logger.Error("study material unavailable; will retry next run", "note", noteID, "error", err)
-		return result, nil
+		return nil
 	}
 	if generated {
 		s.Logger.Info("study material generated", "note", noteID, "prompts", len(material.Feynman), "cards", len(material.Cards))
 	}
 	if err := writeMaterial(s.config.OutputDir, noteID, material); err != nil {
-		return result, err
+		return err
 	}
 	if !stored.IsSynced() {
 		summary, err := s.anki.Sync(ctx, anki.SyncInputDTO{NoteID: noteID, Cards: material.Cards})
 		if err != nil {
 			if ctx.Err() != nil {
-				return result, err
+				return err
 			}
 			// The material is already persisted. A later one-shot run can retry
 			// Anki without spending another model turn.
 			s.Logger.Error("Anki sync failed; will retry next run", "note", noteID, "error", err)
-			return result, nil
+			return nil
 		}
 		if err := stored.MarkSynced(); err != nil {
-			return result, err
+			return err
 		}
 		if err := s.repo.SaveMaterial(stored); err != nil {
-			return result, err
+			return err
 		}
 		s.Logger.Info("cards synchronized with Anki", "note", noteID, "created", summary.Created, "updated", summary.Updated)
 	}
 	if err := s.markPagesDone(pendingGeneration); err != nil {
-		return result, err
+		return err
 	}
-	return result, nil
+	return nil
 }
 
 // migrateStoredMaterial upgrades generated material even when every page is

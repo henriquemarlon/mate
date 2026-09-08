@@ -62,3 +62,12 @@ func (r *SQLiteRepository) FindPagesByStatus(noteID string, status entity.PageSt
 	}
 	return pages, nil
 }
+
+func (r *SQLiteRepository) FindAllPagesByStatus(status entity.PageStatus) ([]entity.Page, error) {
+	var pages []entity.Page
+	err := r.Db.Where("status = ?", status).Order("note_id, page_number").Find(&pages).Error
+	if err != nil {
+		return nil, fmt.Errorf("repository: find all pages by status: %w", err)
+	}
+	return pages, nil
+}

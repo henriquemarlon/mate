@@ -11,6 +11,7 @@ require (
 	github.com/lmittmann/tint v1.2.0
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
+	golang.org/x/term v0.28.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )

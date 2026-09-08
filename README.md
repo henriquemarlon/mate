@@ -9,6 +9,7 @@ Turn locally synced GoodNotes manuscripts into auditable study material.
   - [Installation](#installation)
   - [Configuration](#configuration)
   - [Running](#running)
+  - [Reviewing uncertain pages](#reviewing-uncertain-pages)
   - [Launch at Login (macOS only)](#launch-at-login-macos-only)
 
 ## Getting Started
@@ -96,6 +97,25 @@ mate run \
 ```
 
 Anki Desktop must be running so Mate can reach AnkiConnect. The default polling interval is 900 seconds and can be changed with `--poll-interval` or `MATE_POLL_INTERVAL_SECONDS`.
+
+### Reviewing uncertain pages
+
+When Mate reports that pages need review, start an interactive session:
+
+```sh
+export MATE_LLM_API_KEY_FILE="$HOME/.mate/llm_api_key"
+mate review
+```
+
+Mate opens each annotated PNG in the system image viewer and presents an English interactive menu. Use the arrow keys and Enter to correct the current `[?]`, retry transcription, edit the complete Markdown, skip a new page, reopen the image, or quit. A changed page that had already produced material can instead keep its previous content when the edit was visual only. When several notebooks need attention, Mate first lets you choose one or review all of them, so their exact file names do not need to be typed.
+
+`Edit full transcription` uses `$EDITOR`, falling back to `/usr/bin/vi`. Set `EDITOR=nvim` to use Neovim. Once a page is resolved, Mate updates the transcript, Feynman prompts, cards, and Anki through the same completion path used by `mate run`.
+
+The optional `--note`, `--page`, and `--no-open` flags remain available for scripts and targeted sessions:
+
+```sh
+mate review --note "Distributed Systems.pdf" --page 6
+```
 
 ### Launch at Login (macOS only)
 

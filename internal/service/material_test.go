@@ -59,6 +59,9 @@ func (r *fakeRepository) FindProcessedPages(string) ([]entity.Page, error) { pan
 func (r *fakeRepository) FindPagesByStatus(string, entity.PageStatus) ([]entity.Page, error) {
 	panic("unused")
 }
+func (r *fakeRepository) FindAllPagesByStatus(entity.PageStatus) ([]entity.Page, error) {
+	panic("unused")
+}
 
 func newTestService(model llm.Model) (*Service, *fakeRepository) {
 	repo := &fakeRepository{}

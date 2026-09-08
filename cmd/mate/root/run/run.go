@@ -20,44 +20,35 @@ var cfg *configs.MateConfig
 var Cmd = &cobra.Command{
 	Use:   "run",
 	Short: "Watch local GoodNotes PDFs and process new pages",
-	Args:  cobra.NoArgs,
-	RunE:  run,
+	Long: `Scans the study directory on a timer, transcribes pages that changed,
+writes the study artifacts, and synchronizes the cards with Anki. A page the
+transcriber cannot confirm is set aside for "mate review" instead of guessed.
+
+Every flag can also be set through its MATE_ environment variable; the
+generated reference in docs/config.md lists them with their defaults.`,
+	Example: runExamples,
+	Args:    cobra.NoArgs,
+	RunE:    run,
 }
+
+const runExamples = `# Watch the configured study directory:
+mate run
+
+# Watch a specific directory and scan every five minutes:
+mate run --study-dir ~/GoodNotes --poll-interval 300`
 
 func init() {
 	configs.SetDefaults()
-	Cmd.Flags().String("study-dir", "", "Local folder containing synced GoodNotes PDFs")
-	Cmd.Flags().String("output-dir", "", "Directory for transcripts and generated study artifacts")
-	Cmd.Flags().String("state-db", "", "SQLite state database path")
-	Cmd.Flags().String("llm-model", "", "Chat model identifier requested from the endpoint")
-	Cmd.Flags().String("llm-base-url", "", "OpenAI-compatible chat completion endpoint")
-	Cmd.Flags().String("anki-endpoint", "", "AnkiConnect HTTP endpoint")
-	Cmd.Flags().String("anki-deck", "", "Root Anki deck name")
-	Cmd.Flags().Int("dpi", 0, "PDF render DPI (72-600)")
-	Cmd.Flags().Int("poll-interval", 0, "Interval in seconds between study directory scans")
-	Cmd.Flags().String("log-level", "", "Log level: debug, info, warn, or error")
-	Cmd.Flags().Bool("notifications", true, "Send a macOS notification when a page needs review")
-	Cmd.Flags().Bool("log-color", true, "Enable colored log output")
-	cobra.CheckErr(viper.BindPFlag(configs.STUDY_DIR, Cmd.Flags().Lookup("study-dir")))
-	cobra.CheckErr(viper.BindPFlag(configs.OUTPUT_DIR, Cmd.Flags().Lookup("output-dir")))
-	cobra.CheckErr(viper.BindPFlag(configs.STATE_DB, Cmd.Flags().Lookup("state-db")))
-	cobra.CheckErr(viper.BindPFlag(configs.LLM_MODEL, Cmd.Flags().Lookup("llm-model")))
-	cobra.CheckErr(viper.BindPFlag(configs.LLM_BASE_URL, Cmd.Flags().Lookup("llm-base-url")))
-	cobra.CheckErr(viper.BindPFlag(configs.ANKI_ENDPOINT, Cmd.Flags().Lookup("anki-endpoint")))
-	cobra.CheckErr(viper.BindPFlag(configs.ANKI_DECK, Cmd.Flags().Lookup("anki-deck")))
-	cobra.CheckErr(viper.BindPFlag(configs.DPI, Cmd.Flags().Lookup("dpi")))
-	cobra.CheckErr(viper.BindPFlag(configs.POLL_INTERVAL_SECONDS, Cmd.Flags().Lookup("poll-interval")))
-	cobra.CheckErr(viper.BindPFlag(configs.NOTIFICATIONS, Cmd.Flags().Lookup("notifications")))
-	cobra.CheckErr(viper.BindPFlag(configs.LOG_LEVEL, Cmd.Flags().Lookup("log-level")))
-	cobra.CheckErr(viper.BindPFlag(configs.LOG_COLOR, Cmd.Flags().Lookup("log-color")))
+	flags := Cmd.Flags()
+	flags.Int("poll-interval", viper.GetInt(configs.POLL_INTERVAL_SECONDS), "Interval in seconds between study directory scans")
+	flags.Bool("notifications", viper.GetBool(configs.NOTIFICATIONS), "Send a macOS notification when a page needs review")
+	cobra.CheckErr(viper.BindPFlag(configs.POLL_INTERVAL_SECONDS, flags.Lookup("poll-interval")))
+	cobra.CheckErr(viper.BindPFlag(configs.NOTIFICATIONS, flags.Lookup("notifications")))
 
 	Cmd.PreRunE = func(_ *cobra.Command, _ []string) error {
 		var err error
 		cfg, err = configs.LoadMateConfig()
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 }
 
