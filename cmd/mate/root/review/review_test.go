@@ -12,7 +12,7 @@ import (
 func TestReviewOptionsMatchThePageState(t *testing.T) {
 	uncertain := reviewOptions(service.ReviewItem{Transcription: "clock [?]"})
 	assertChoices(t, uncertain, []menuChoice{
-		choiceCorrect, choiceRetry, choiceEdit, choiceSkip, choiceOpen, choiceQuit,
+		choiceRetry, choiceEdit, choiceSkip, choiceOpen, choiceQuit,
 	})
 
 	changed := reviewOptions(service.ReviewItem{Changed: true})
@@ -25,13 +25,13 @@ func TestNumberedMenuRetriesInvalidInput(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader("unknown\n2\n"))
 	var output bytes.Buffer
 	choice, err := chooseNumbered(reader, &output, "Choose:", []menuOption{
-		{Label: "First", Value: choiceCorrect},
-		{Label: "Second", Value: choiceRetry},
+		{Label: "First", Value: choiceRetry},
+		{Label: "Second", Value: choiceEdit},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if choice != choiceRetry {
+	if choice != choiceEdit {
 		t.Fatalf("expected the second option, got %q", choice)
 	}
 	if !strings.Contains(output.String(), "Choose a number between 1 and 2.") {

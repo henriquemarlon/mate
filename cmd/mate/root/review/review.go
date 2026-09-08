@@ -27,7 +27,6 @@ import (
 type menuChoice string
 
 const (
-	choiceCorrect   menuChoice = "correct"
 	choiceRetry     menuChoice = "retry"
 	choiceEdit      menuChoice = "edit"
 	choiceSkip      menuChoice = "skip"
@@ -202,24 +201,6 @@ func run(cmd *cobra.Command, _ []string) (err error) {
 					fmt.Fprintf(output, "Correction failed: %v\n", err)
 					continue
 				}
-			case choiceCorrect:
-				if !strings.Contains(item.Transcription, "[?]") {
-					fmt.Fprintln(output, "There is no [?] marker to replace; edit the full transcription instead.")
-					continue
-				}
-				answer, readErr := readRequiredLine(reader, output, "Replacement for [?]: ")
-				if errors.Is(readErr, io.EOF) {
-					return nil
-				}
-				if readErr != nil {
-					return readErr
-				}
-				markdown := strings.Replace(item.Transcription, "[?]", answer, 1)
-				item, err = saveOrComplete(ctx, mate, item, markdown)
-				if err != nil {
-					fmt.Fprintf(output, "Correction failed: %v\n", err)
-					continue
-				}
 			}
 		}
 		fmt.Fprintf(output, "Resolved %s page %d (%s).\n", item.NoteID, item.PageNumber, item.Status)
@@ -270,14 +251,10 @@ func chooseNotebook(reader *bufio.Reader, output io.Writer, terminalFD int, inte
 }
 
 func reviewOptions(item service.ReviewItem) []menuOption {
-	options := make([]menuOption, 0, 6)
-	if strings.Contains(item.Transcription, "[?]") {
-		options = append(options, menuOption{Label: "Correct uncertain text", Value: choiceCorrect})
+	options := []menuOption{
+		{Label: "Retry transcription", Value: choiceRetry},
+		{Label: "Edit full transcription", Value: choiceEdit},
 	}
-	options = append(options,
-		menuOption{Label: "Retry transcription", Value: choiceRetry},
-		menuOption{Label: "Edit full transcription", Value: choiceEdit},
-	)
 	if item.Changed {
 		options = append(options, menuOption{Label: "Keep previous content", Value: choiceKeep})
 	} else {
