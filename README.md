@@ -114,7 +114,7 @@ Mate opens each annotated PNG in the system image viewer and presents an English
 The optional `--note`, `--page`, and `--no-open` flags remain available for scripts and targeted sessions:
 
 ```sh
-mate review --note "Distributed Systems.pdf" --page 6
+mate review --no-open
 ```
 
 ### Launch at Login (macOS only)
