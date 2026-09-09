@@ -142,18 +142,9 @@ func run(cmd *cobra.Command, _ []string) (err error) {
 		return nil
 	}
 	for _, item := range items {
-		fmt.Fprintf(output, "\n%s — page %d\n", item.NoteID, item.PageNumber)
-		if item.Changed {
-			fmt.Fprintln(output, "Reason: a previously processed page changed.")
-		} else {
-			fmt.Fprintln(output, "Reason: the transcription needs human confirmation.")
-		}
 		showReviewImage(output, item)
 
 		for item.Status == entity.PageStatusNeedsReview {
-			if excerpt := uncertaintyExcerpt(item.Transcription); excerpt != "" {
-				fmt.Fprintf(output, "\nUncertain excerpt:\n%s\n", excerpt)
-			}
 			choice, chooseErr := chooseMenu(reader, output, terminalFD, interactive, "What would you like to do?", reviewOptions(item))
 			if errors.Is(chooseErr, io.EOF) {
 				return nil
@@ -464,24 +455,4 @@ func editTranscription(initial string) (string, error) {
 		return "", errors.New("edited transcription is empty")
 	}
 	return string(content), nil
-}
-
-func uncertaintyExcerpt(markdown string) string {
-	index := strings.Index(markdown, "[?]")
-	if index < 0 {
-		return ""
-	}
-	before := []rune(markdown[:index])
-	after := []rune(markdown[index+len("[?]"):])
-	prefix := ""
-	suffix := ""
-	if len(before) > 120 {
-		before = before[len(before)-120:]
-		prefix = "…"
-	}
-	if len(after) > 120 {
-		after = after[:120]
-		suffix = "…"
-	}
-	return prefix + string(before) + "[?]" + string(after) + suffix
 }
