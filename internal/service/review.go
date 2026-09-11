@@ -12,11 +12,6 @@ import (
 	"github.com/henriquemarlon/mate/internal/infra/llm/transcriber"
 )
 
-var (
-	ErrInvalidReview    = errors.New("invalid review")
-	ErrUnresolvedReview = errors.New("unresolved review")
-)
-
 // ReviewItem is the command-facing view of one page waiting for a person.
 // Changed distinguishes an uncertain new transcription from a page that had
 // already produced material before its PDF pixels changed.
@@ -33,7 +28,7 @@ type ReviewItem struct {
 // Empty filters mean all notebooks and all pages.
 func (s *Service) PendingReviews(noteID string, pageNumber int) ([]ReviewItem, error) {
 	if pageNumber < 0 {
-		return nil, fmt.Errorf("%w: page number cannot be negative", ErrInvalidReview)
+		return nil, errors.New("page number cannot be negative")
 	}
 	pages, err := s.repo.FindAllPagesByStatus(entity.PageStatusNeedsReview)
 	if err != nil {
@@ -76,10 +71,10 @@ func (s *Service) UpdateReviewDraft(noteID string, pageNumber int, markdown stri
 func (s *Service) CorrectReview(ctx context.Context, noteID string, pageNumber int, markdown string) (ReviewItem, error) {
 	markdown = strings.TrimSpace(markdown)
 	if markdown == "" {
-		return ReviewItem{}, fmt.Errorf("%w: corrected transcription cannot be empty", ErrInvalidReview)
+		return ReviewItem{}, errors.New("corrected transcription cannot be empty")
 	}
 	if strings.Contains(markdown, "[?]") {
-		return ReviewItem{}, fmt.Errorf("%w: corrected transcription still contains [?]", ErrUnresolvedReview)
+		return ReviewItem{}, errors.New("corrected transcription still contains [?]")
 	}
 	page, err := s.reviewPage(noteID, pageNumber)
 	if err != nil {
@@ -129,7 +124,7 @@ func (s *Service) RetryReview(ctx context.Context, noteID string, pageNumber int
 	switch output.Kind {
 	case "cover", "blank":
 		if page.ProcessedHash != "" {
-			return ReviewItem{}, fmt.Errorf("%w: a previously processed page is now %s; edit its transcription or keep the previous version", ErrInvalidReview, output.Kind)
+			return ReviewItem{}, fmt.Errorf("a previously processed page is now %s; edit its transcription or keep the previous version", output.Kind)
 		}
 		if err := s.markPageProcessed(page.NoteID, page.PageNumber, rendered.Hash, "", entity.PageStatusSkipped); err != nil {
 			return ReviewItem{}, err
@@ -139,7 +134,7 @@ func (s *Service) RetryReview(ctx context.Context, noteID string, pageNumber int
 			return ReviewItem{}, err
 		}
 	default:
-		return ReviewItem{}, fmt.Errorf("%w: unsupported transcription kind %q", ErrInvalidReview, output.Kind)
+		return ReviewItem{}, fmt.Errorf("unsupported transcription kind %q", output.Kind)
 	}
 
 	s.discardReviewPage(page)
@@ -158,7 +153,7 @@ func (s *Service) SkipReview(ctx context.Context, noteID string, pageNumber int)
 		return ReviewItem{}, err
 	}
 	if page.ProcessedHash != "" {
-		return ReviewItem{}, fmt.Errorf("%w: a previously processed page cannot be skipped; retry, edit, or keep it", ErrInvalidReview)
+		return ReviewItem{}, errors.New("a previously processed page cannot be skipped; retry, edit, or keep it")
 	}
 	if err := s.markPageProcessed(page.NoteID, page.PageNumber, page.ObservedHash, "", entity.PageStatusSkipped); err != nil {
 		return ReviewItem{}, err
@@ -178,7 +173,7 @@ func (s *Service) KeepReview(noteID string, pageNumber int) (ReviewItem, error) 
 		return ReviewItem{}, err
 	}
 	if page.ProcessedHash == "" {
-		return ReviewItem{}, fmt.Errorf("%w: an unprocessed page has no previous transcription to keep", ErrInvalidReview)
+		return ReviewItem{}, errors.New("an unprocessed page has no previous transcription to keep")
 	}
 	page.ProcessedHash = page.ObservedHash
 	page.Status = entity.PageStatusDone
@@ -203,7 +198,7 @@ func (s *Service) reviewPage(noteID string, pageNumber int) (entity.Page, error)
 		return entity.Page{}, err
 	}
 	if page.Status != entity.PageStatusNeedsReview {
-		return entity.Page{}, fmt.Errorf("%w: %s page %d is %s", ErrInvalidReview, page.NoteID, page.PageNumber, page.Status)
+		return entity.Page{}, fmt.Errorf("%s page %d is %s", page.NoteID, page.PageNumber, page.Status)
 	}
 	return page, nil
 }
@@ -234,7 +229,7 @@ func (s *Service) reviewItem(page entity.Page) (ReviewItem, error) {
 func (s *Service) renderReviewPage(ctx context.Context, page entity.Page) (renderedPage, []byte, error) {
 	clean := filepath.Clean(filepath.FromSlash(page.NoteID))
 	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return renderedPage{}, nil, fmt.Errorf("%w: invalid note path %q", ErrInvalidReview, page.NoteID)
+		return renderedPage{}, nil, fmt.Errorf("invalid note path %q", page.NoteID)
 	}
 	pdfPath := filepath.Join(s.config.StudyDir, clean)
 	dir, pages, err := renderPDF(ctx, pdfPath, s.config.DPI)
@@ -248,9 +243,9 @@ func (s *Service) renderReviewPage(ctx context.Context, page entity.Page) (rende
 		}
 		content, err := os.ReadFile(rendered.Path)
 		if err != nil {
-			return renderedPage{}, nil, fmt.Errorf("review: read rendered page: %w", err)
+			return renderedPage{}, nil, fmt.Errorf("read rendered page: %w", err)
 		}
 		return rendered, content, nil
 	}
-	return renderedPage{}, nil, fmt.Errorf("%w: %s has no page %d", ErrInvalidReview, page.NoteID, page.PageNumber)
+	return renderedPage{}, nil, fmt.Errorf("%s has no page %d", page.NoteID, page.PageNumber)
 }

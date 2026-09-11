@@ -47,7 +47,7 @@ type Service struct {
 	repo        Repository
 	transcriber *transcriber.Transcriber
 	paradigm    *paradigm.Generator
-	anki        Anki
+	anki        *anki.Client
 }
 
 var _ service.SupervisedService = (*Service)(nil)
@@ -55,17 +55,13 @@ var _ service.TickImpl = (*Service)(nil)
 
 const ServiceName = "mate"
 
-type Anki interface {
-	Sync(context.Context, anki.SyncInputDTO) (anki.SyncOutputDTO, error)
-}
-
 // CreateInfo contains the configuration for creating the Mate service.
 type CreateInfo struct {
 	Config     configs.MateConfig
 	Logger     *slog.Logger
 	Repository Repository
 	LLM        llm.Model
-	Anki       Anki
+	Anki       *anki.Client
 }
 
 // Create initializes the Mate service from already-acquired dependencies.
