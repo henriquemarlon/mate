@@ -1,4 +1,4 @@
-package review
+package root
 
 import (
 	"bufio"
@@ -13,13 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/domain/entity"
-	"github.com/henriquemarlon/mate/internal/infra/anki"
-	"github.com/henriquemarlon/mate/internal/infra/repository/sqlite"
 	"github.com/henriquemarlon/mate/internal/service"
-	"github.com/henriquemarlon/mate/pkg/llm"
-	pkgservice "github.com/henriquemarlon/mate/pkg/service"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -42,13 +37,12 @@ type menuOption struct {
 }
 
 var (
-	cfg        *configs.MateConfig
 	noteID     string
 	pageNumber int
 	noOpen     bool
 )
 
-var Cmd = &cobra.Command{
+var reviewCmd = &cobra.Command{
 	Use:   "review",
 	Short: "Resolve pages that need human review",
 	Long: `Walks the pages the transcriber could not confirm, opens the annotated
@@ -60,7 +54,8 @@ Every flag can also be set through its MATE_ environment variable; the
 generated reference in docs/config.md lists them with their defaults.`,
 	Example: reviewExamples,
 	Args:    cobra.NoArgs,
-	RunE:    run,
+	PreRunE: loadConfig,
+	RunE:    review,
 }
 
 const reviewExamples = `# Resolve every pending page:
@@ -70,57 +65,24 @@ mate review
 mate review --no-open`
 
 func init() {
-	flags := Cmd.Flags()
+	flags := reviewCmd.Flags()
 	flags.StringVar(&noteID, "note", "", "Review only this PDF path relative to the study directory")
 	flags.IntVar(&pageNumber, "page", 0, "Review only this page number")
 	flags.BoolVar(&noOpen, "no-open", false, "Print image paths without opening them")
-
-	Cmd.PreRunE = func(_ *cobra.Command, _ []string) error {
-		var err error
-		cfg, err = configs.LoadMateConfig()
-		return err
-	}
 }
 
 // run acquires the same external resources as the run command and then walks
 // the pending pages, applying the correction chosen for each one, instead of
 // serving on a timer.
-func run(cmd *cobra.Command, _ []string) (err error) {
+func review(cmd *cobra.Command, _ []string) (err error) {
 	ctx := cmd.Context()
-	logger := pkgservice.NewLogger(service.ServiceName, cfg.LogLevel, cfg.LogColor)
-
-	repo, err := sqlite.NewSQLiteRepository(ctx, cfg.StateDB)
+	mate, closeRepo, err := mateService(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err = errors.Join(err, repo.Close())
+		err = errors.Join(err, closeRepo())
 	}()
-
-	llmClient, err := llm.New(llm.Config{
-		APIKey:         cfg.LLMAPIKey.Value,
-		Model:          cfg.LLMModel,
-		BaseURL:        cfg.LLMBaseURL,
-		RequestTimeout: cfg.LLMTimeoutSeconds,
-		Logger:         logger,
-	})
-	if err != nil {
-		return fmt.Errorf("configure llm client: %w", err)
-	}
-	ankiClient, err := anki.New(cfg.AnkiEndpoint, cfg.AnkiDeck)
-	if err != nil {
-		return err
-	}
-	mate, err := service.Create(ctx, &service.CreateInfo{
-		Config:     *cfg,
-		Logger:     logger,
-		Repository: repo,
-		LLM:        llmClient,
-		Anki:       ankiClient,
-	})
-	if err != nil {
-		return err
-	}
 
 	output := cmd.OutOrStdout()
 	items, err := mate.PendingReviews(noteID, pageNumber)
