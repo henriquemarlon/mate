@@ -18,6 +18,7 @@ exec "$HOME/.local/bin/mise" exec github:henriquemarlon/mate -- mate run \
   --anki-endpoint=http://127.0.0.1:8765 \
   --llm-base-url=http://127.0.0.1:18080/v1 \
   --llm-model=gpt-5.6-luna \
+  --log-level=debug \
   --log-color=false \
   &gt;&gt;"$HOME/.mate/launchd.stdout.log" \
   2&gt;&gt;"$HOME/.mate/launchd.stderr.log"</string>
