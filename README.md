@@ -107,14 +107,20 @@ export MATE_LLM_API_KEY_FILE="$HOME/.mate/llm_api_key"
 mate review
 ```
 
-Mate opens each annotated PNG in the system image viewer and presents an English interactive menu. Use the arrow keys and Enter to retry transcription, edit the complete Markdown, skip a new page, reopen the image, or quit. A changed page that had already produced material can instead keep its previous content when the edit was visual only. When several notebooks need attention, Mate first lets you choose one or review all of them, so their exact file names do not need to be typed.
+Mate opens each annotated PNG in the system image viewer and prompts for one action per page:
 
-`Edit full transcription` uses `$EDITOR`, falling back to `/usr/bin/vi`. Set `EDITOR=nvim` to use Neovim. Once a page is resolved, Mate updates the transcript, Feynman prompts, cards, and Anki through the same completion path used by `mate run`.
+```
+[e]dit  [r]etry  [s]kip  [o]pen  [q]uit >
+```
 
-The optional `--note`, `--page`, and `--no-open` flags remain available for scripts and targeted sessions:
+Type the letter and press Enter to edit the complete Markdown, retry the transcription, skip a new page, reopen the image, or quit. A changed page that had already produced material offers `[k]eep previous` instead of `[s]kip`, for when the edit was visual only. When several notebooks need attention, Mate first lets you choose one by number or review all of them, so their exact file names do not need to be typed.
+
+Editing uses `$EDITOR`, falling back to `/usr/bin/vi`. Set `EDITOR=nvim` to use Neovim. Once a page is resolved, Mate updates the transcript, Feynman prompts, cards, and Anki through the same completion path used by `mate run`.
+
+The optional `--note` and `--page` flags narrow a session down:
 
 ```sh
-mate review --no-open
+mate review --note "Distributed Systems.pdf" --page 3
 ```
 
 ### Launch at Login (macOS only)

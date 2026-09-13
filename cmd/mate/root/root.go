@@ -1,6 +1,8 @@
 package root
 
 import (
+	"github.com/henriquemarlon/mate/cmd/mate/root/review"
+	"github.com/henriquemarlon/mate/cmd/mate/root/run"
 	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/infra/version"
 	"github.com/spf13/cobra"
@@ -14,6 +16,10 @@ var Cmd = &cobra.Command{
 	Short:   "Mate - Turn GoodNotes PDFs into study material",
 	Long:    `Mate detects local GoodNotes PDFs, transcribes new handwritten pages with an LLM, and writes auditable study artifacts.`,
 	Version: version.BuildVersion,
+	// A command that fails while running has already been invoked correctly,
+	// so repeating its usage buries the message that matters. Cobra honors
+	// this for every subcommand.
+	SilenceUsage: true,
 }
 
 func init() {
@@ -45,6 +51,6 @@ func init() {
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_LEVEL, flags.Lookup("log-level")))
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_COLOR, flags.Lookup("log-color")))
 
-	Cmd.AddCommand(runCmd, reviewCmd)
+	Cmd.AddCommand(run.Cmd, review.Cmd)
 	Cmd.DisableAutoGenTag = true
 }

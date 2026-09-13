@@ -38,11 +38,13 @@ func NewSQLiteRepository(ctx context.Context, conn string) (*SQLiteRepository, e
 	}
 	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL"
 
+	// Successful statements are implementation detail. Keep slow queries and
+	// database failures visible without burying the CLI output.
 	newLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
 			SlowThreshold:             time.Second,
-			LogLevel:                  logger.Info,
+			LogLevel:                  logger.Warn,
 			IgnoreRecordNotFoundError: true,
 			Colorful:                  true,
 		},
