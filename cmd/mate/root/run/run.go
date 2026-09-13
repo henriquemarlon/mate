@@ -22,7 +22,7 @@ var Cmd = &cobra.Command{
 	Short: "Watch local GoodNotes PDFs and process new pages",
 	Long: `Scans the study directory on a timer, transcribes pages that changed,
 writes the study artifacts, and synchronizes the cards with Anki. A page the
-transcriber cannot confirm is set aside for "mate review" instead of guessed.
+transcriber cannot confirm is quarantined instead of guessed.
 
 Every flag can also be set through its MATE_ environment variable; the
 generated reference in docs/config.md lists them with their defaults.`,
@@ -41,7 +41,7 @@ func init() {
 	configs.SetDefaults()
 	flags := Cmd.Flags()
 	flags.Int("poll-interval", viper.GetInt(configs.POLL_INTERVAL_SECONDS), "Interval in seconds between study directory scans")
-	flags.Bool("notifications", viper.GetBool(configs.NOTIFICATIONS), "Send a macOS notification when a page needs review")
+	flags.Bool("notifications", viper.GetBool(configs.NOTIFICATIONS), "Send a macOS notification when a page is quarantined")
 	cobra.CheckErr(viper.BindPFlag(configs.POLL_INTERVAL_SECONDS, flags.Lookup("poll-interval")))
 	cobra.CheckErr(viper.BindPFlag(configs.NOTIFICATIONS, flags.Lookup("notifications")))
 

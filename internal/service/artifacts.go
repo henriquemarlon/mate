@@ -150,17 +150,6 @@ func reviewPagePath(root, noteID string, pageNumber int) (string, error) {
 	return filepath.Join(dir, "review", fmt.Sprintf("page-%d.png", pageNumber)), nil
 }
 
-func removeReviewPage(root, noteID string, pageNumber int) error {
-	path, err := reviewPagePath(root, noteID, pageNumber)
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("artifacts: remove review page: %w", err)
-	}
-	return nil
-}
-
 func noteDirectory(root, noteID string) (string, error) {
 	relative := strings.TrimSuffix(filepath.FromSlash(noteID), filepath.Ext(noteID))
 	clean := filepath.Clean(relative)

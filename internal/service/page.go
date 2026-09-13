@@ -10,7 +10,7 @@ import (
 
 // observePage runs the page state machine for one observed hash: a new page
 // is created pending, an unchanged page is ignored, a changed unprocessed
-// page is reprocessed, and a changed processed page is sent to review.
+// page is reprocessed, and a changed processed page is quarantined.
 func (s *Service) observePage(noteID string, pageNumber int, hash string) (entity.PageAction, error) {
 	if strings.TrimSpace(hash) == "" {
 		return "", fmt.Errorf("%w: observed hash cannot be empty", entity.ErrInvalidPage)

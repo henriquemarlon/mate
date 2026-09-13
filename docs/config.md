@@ -69,7 +69,7 @@ Log level: debug, info, warn, or error
 
 ## `MATE_NOTIFICATIONS`
 
-Send a macOS notification when a page needs review
+Send a macOS notification when a page is quarantined
 
 - Type: `Bool`
 - Default: `true`

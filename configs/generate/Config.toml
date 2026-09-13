@@ -83,5 +83,5 @@ used-by = ["mate"]
 [notifications.MATE_NOTIFICATIONS]
 go-type = "Bool"
 default = "true"
-description = "Send a macOS notification when a page needs review"
+description = "Send a macOS notification when a page is quarantined"
 used-by = ["mate"]

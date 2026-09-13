@@ -1,7 +1,6 @@
 package root
 
 import (
-	"github.com/henriquemarlon/mate/cmd/mate/root/review"
 	"github.com/henriquemarlon/mate/cmd/mate/root/run"
 	"github.com/henriquemarlon/mate/configs"
 	"github.com/henriquemarlon/mate/internal/infra/version"
@@ -51,6 +50,6 @@ func init() {
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_LEVEL, flags.Lookup("log-level")))
 	cobra.CheckErr(viper.BindPFlag(configs.LOG_COLOR, flags.Lookup("log-color")))
 
-	Cmd.AddCommand(run.Cmd, review.Cmd)
+	Cmd.AddCommand(run.Cmd)
 	Cmd.DisableAutoGenTag = true
 }

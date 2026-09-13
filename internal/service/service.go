@@ -29,7 +29,6 @@ type Repository interface {
 	UpdatePages(pages []entity.Page) error
 	FindProcessedPages(noteID string) ([]entity.Page, error)
 	FindPagesByStatus(noteID string, status entity.PageStatus) ([]entity.Page, error)
-	FindAllPagesByStatus(status entity.PageStatus) ([]entity.Page, error)
 	SaveMaterial(material *entity.Material) error
 	FindMaterial(noteID string) (entity.Material, error)
 }
@@ -147,13 +146,13 @@ func (s *Service) run(ctx context.Context) (Summary, error) {
 			result.NotesProcessed++
 		}
 		if s.config.Notifications && noteSummary.NeedsReview > 0 {
-			// Best-effort desktop notification: the daemon runs unattended,
-			// so this is the only signal that a page is waiting for a human.
+			// Best-effort desktop notification: the daemon runs unattended, so
+			// this is the only signal that a page was quarantined.
 			// Headless hosts have no notification server; failures are debug
 			// noise, never a tick error.
-			message := fmt.Sprintf("%s: %d page(s) need review. Run mate review.", filepath.Base(path), noteSummary.NeedsReview)
+			message := fmt.Sprintf("%s: %d page(s) could not be transcribed confidently.", filepath.Base(path), noteSummary.NeedsReview)
 			if err := beeep.Notify("Mate", message, ""); err != nil {
-				s.Logger.Debug("review notification failed", "note", path, "error", err)
+				s.Logger.Debug("quarantine notification failed", "note", path, "error", err)
 			}
 		}
 		return nil
@@ -210,9 +209,9 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 			if ctx.Err() != nil {
 				return result, err
 			}
-			// A failed turn is page-scoped: send the page to review and
-			// keep going instead of dropping the rest of the note.
-			s.Logger.Warn("transcription failed; page sent to review", "note", noteID, "page", page.Number, "error", err)
+			// A failed turn is page-scoped: quarantine the page and keep going
+			// instead of dropping the rest of the note.
+			s.Logger.Warn("transcription failed; page quarantined", "note", noteID, "page", page.Number, "error", err)
 			if err := s.markPageNeedsReview(noteID, page.Number, page.Hash, ""); err != nil {
 				return result, err
 			}
@@ -251,8 +250,8 @@ func (s *Service) processNote(ctx context.Context, pdfPath string) (Summary, err
 	return result, s.completeNote(ctx, noteID)
 }
 
-// completeNote writes the current transcript and finishes any material work
-// left by either the unattended run or an interactive review.
+// completeNote writes the current transcript and finishes material work left
+// by the unattended workflow.
 func (s *Service) completeNote(ctx context.Context, noteID string) error {
 	processed, err := s.repo.FindProcessedPages(noteID)
 	if err != nil {
